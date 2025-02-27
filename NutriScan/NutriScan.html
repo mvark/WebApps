@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Based on this HTML5 QR Code Reader sample by Minhaz https://blog.minhazav.dev/research/html5-qrcode.html -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5">
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>NutriScan</title>
+  <style>
+    #desc {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+      padding: 15px; 
+    }
+    
+    #desc img {
+      max-width: 300px;
+      padding: 10px;
+    }
+    
+    button {
+      background-color: #007bff; 
+      border: none;
+      color: white;
+      padding: 12px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 18px;
+      margin: 4px 2px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="desc">Scan Barcode to view details from Open Food Facts 🥫🔍</div>
+  <div id="reader"></div>
+  <script src="html5-qrcode.min.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    // Handle the success of scanning a QR code
+    function onScanSuccess(decodedText, decodedResult) {
+      html5QrcodeScanner.clear();
+
+      // Check if the scanned code is a 13-digit barcode
+      const isEAN13 = isNumericEAN13(decodedText);
+      if (isEAN13) {
+        // Construct the API URL with the barcode
+        const url = `https://world.openfoodfacts.org/api/v2/product/${decodedText}?lc=en&cc=in&tags_lc=en&fields=product_name,image_thumb_url,nova_group,nutriscore_grade`;
+        fetchProdData(url);
+      } else {
+        // Display an invalid barcode message
+        document.getElementById('desc').innerHTML = `<p>Barcode detected ${decodedText} is invalid</p><button onclick="location.reload();">Back to Scan</button>`;
+      }
+    }
+
+    // Check if the input is a numeric 13-digit EAN barcode
+    function isNumericEAN13(input) {
+      const numericCheck = /^\d+$/;
+      const lengthCheck = input.length === 13;
+      const ean13PatternCheck = /^(?:\d{13})$/;
+      return numericCheck.test(input) && lengthCheck && ean13PatternCheck.test(input);
+    }
+
+    // Get the nutritional score description based on the grade
+    function getNutriScore(grade) {
+      const nutriScores = {
+        A: "Very good nutritional quality",
+        B: "Good nutritional quality",
+        C: "Average nutritional quality",
+        D: "Poor nutritional quality",
+        E: "Bad nutritional quality",
+      };
+      return `${grade} - ${nutriScores[grade] || 'Unknown grade'}`;
+    }
+
+    // Get the NOVA score description based on the score
+    function getNovaScore(score) {
+      const novaScores = {
+        1: "Unprocessed or minimally processed foods",
+        2: "Processed culinary ingredients",
+        3: "Processed foods",
+        4: "Ultra processed foods",
+      };
+      return `${score} - ${novaScores[score] || 'Unknown score'}`;
+    }
+
+    // Fetch product data from the Open Food Facts API
+    async function fetchProdData(url) {
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        let details = "";
+        const status = `${data.status}`;
+
+        if (status === "0") {
+          // Product details not found
+          details += `<h2>Product details for ${data.code} not found in OFF database</h2><p><button onclick="location.reload();">Back to Scan</button></p>`;
+        } else {
+          // Product details found
+          const grading = [];
+
+          if (data.product.nova_group != null) {
+            grading.push(`Nova Grade: <b>${getNovaScore(data.product.nova_group)}</b>`);
+          }
+          if (data.product.nutriscore_grade != null) {
+            grading.push(`Nutri-Score: <b>${getNutriScore(data.product.nutriscore_grade.toUpperCase())}</b>`);
+          }
+
+          details += `
+            <h2>Product Details from Open Food Facts</h2>
+            <p>
+              <img src='${data.product.image_thumb_url}' alt='${data.product.product_name}'/><br/>
+              ${data.code}: <a href='https://world.openfoodfacts.org/product/${data.code}' target='_blank'>${data.product.product_name}</a><br/>
+              ${grading.join('<br/>')}
+            </p>
+            <button onclick="location.reload();">Back to Scan</button>
+          `;
+        }
+
+        // Display the product details
+        document.getElementById('desc').innerHTML = details;
+      } catch (error) {
+        // Handle errors gracefully
+        console.error('Error fetching data:', error);
+        document.getElementById('desc').innerHTML = `Error fetching data: ${error}`;
+      }
+    }
+
+    // Initialize the QR code scanner
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", { fps: 10, qrbox: 250 }
+    );
+
+    // Render the QR code scanner
+    html5QrcodeScanner.render(onScanSuccess);
+  </script>
+</body>
+</html>
