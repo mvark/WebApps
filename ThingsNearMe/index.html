@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Things Near Me</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    /* General Styles */
+    * {
+      margin: 0;
+      padding: 0;
+      font-size: 15px;
+      font-family: helvetica, arial, sans-serif;
+      box-sizing: border-box; /* Added for responsive layout */
+    }
+
+    html, body {
+      background: #000;
+      height: 100%; /* Required for full-height map */
+    }
+
+    #container {
+      max-width: 100%; /* Make container responsive */
+      margin: 0 auto;
+      position: relative;
+      background: #cfe7fa;
+      background: linear-gradient(top, #cfe7fa 0%, #6393c1 100%);
+      padding: 10px; /* Add some padding around the content */
+    }
+
+    /* Map Styles */
+    #map {
+      width: 100%;
+      height: 400px; /* Adjust as needed */
+      margin-bottom: 10px;
+    }
+
+    /* List Styles */
+    ul {
+      padding: 0.5em 1em;
+      list-style-type: decimal; /* Show numbers in the list */
+    }
+
+    output {
+      display: block;
+      margin: 1em 0;
+    }
+
+    li {
+      font-weight: bold;
+      padding: 5px 0;
+    }
+
+    li li {
+      padding-top: 0;
+    }
+
+    li span {
+      font-weight: normal;
+    }
+
+    /* Heading Styles */
+    h1 {
+      color: #101010;
+      text-align: center;
+      font-family: futura, arial, sans-serif;
+      text-transform: uppercase;
+      background: linear-gradient(top, #4c4c4c 0%, #131313 100%);
+      padding: 5px 0;
+    }
+
+    h1 a {
+      color: #000;
+    }
+
+    .numbered-marker {
+        background: none;
+        border: none;
+    }
+
+    .numbered-marker .marker-number {
+        background-color: #007bff; /* Adjust color as needed */
+        color: white;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 12px;
+        font-weight: bold;
+        border: 2px solid white;
+    }
+
+      /* Footer Styles */
+      footer {
+
+      text-align: center;
+      padding: 10px;
+      font-size: 0.8em;
+      position: relative;
+      bottom: 0;
+      width: 100%;
+    }
+
+    /* Add margin to text content */
+    #location,
+    #articles {
+      margin: 0 10px; /* Add horizontal margin */
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      #container {
+        padding: 5px;
+      }
+      h1 {
+        font-size: 1.2em;
+      }
+      ul {
+        padding: 0.5em;
+        list-style-type: decimal; /* Show numbers in the list */
+      }
+      li, output {
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Things Near Me</h1>
+    <div id="map"></div>
+    <output id="location"></output>
+    <ul id="articles"></ul>
+    <footer>
+        <p><a href="http://wait-till-i.com/"></a>Original code</a> by 
+          <a href="http://wait-till-i.com/">Chris Heilmann</a> - 
+          <a href="http://twitter.com/codepo8">@codepo8</a>
+        </p>
+        <p>Customized by <a href="http://twitter.com/mvark">@mvark</a> & GitHub Copilot
+          </p>
+        </footer>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([0, 0], 2); // Default view
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    function geo_success(position) {
+      document.getElementById('location').textContent = 'Current Location - Latitude: ' + position.coords.latitude + ', Longitude: ' + position.coords.longitude;
+
+      map.setView([position.coords.latitude, position.coords.longitude], 13);
+
+      L.marker([position.coords.latitude, position.coords.longitude]).addTo(map)
+        .bindPopup('You are here!')
+        .openPopup();
+
+      // Fetch Wikipedia articles (replace with your actual Geonames API call)
+      fetchWikipediaArticles(position.coords.latitude, position.coords.longitude);
+    }
+
+    function geo_error() {
+      document.getElementById('location').textContent = "Sorry, no position available.";
+    }
+
+    var geo_options = {
+      enableHighAccuracy: true,
+      maximumAge: 30000,
+      timeout: 27000
+    };
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(geo_success, geo_error, geo_options);
+    } else {
+      document.getElementById('location').textContent = "Geolocation is not supported by this browser.";
+    }
+
+    function fetchWikipediaArticles(latitude, longitude) {
+      // Replace with your actual Geonames API endpoint and parameters
+      const geonamesApiUrl = `https://secure.geonames.org/findNearbyWikipediaJSON?lat=${latitude}&lng=${longitude}&radius=10&maxRows=10&username=YOUR_GEONAMES_USERNAME`;
+
+      fetch(geonamesApiUrl)
+        .then(response => response.json())
+        .then(data => {
+          const articlesList = document.getElementById('articles');
+          articlesList.innerHTML = ''; // Clear existing articles
+
+          if (data.geonames && data.geonames.length > 0) {
+            data.geonames.forEach((article, index) => { // Added index
+              const listItem = document.createElement('li');
+              // Display distance
+              const distance = parseFloat(article.distance).toFixed(2);
+              listItem.innerHTML = `<a href="https://${article.wikipediaUrl}" target="_blank">${article.title}</a> (${distance} km) - <span>${article.summary}</span>`;
+              articlesList.appendChild(listItem);
+               // Create numbered marker
+               const numberedIcon = L.divIcon({
+                        className: 'numbered-marker',
+                        html: `<div class="marker-number">${index + 1}</div>`
+                    });
+                    L.marker([article.lat, article.lng], { icon: numberedIcon }).addTo(map)
+                        .bindPopup(`<a href="https://${article.wikipediaUrl}" target="_blank">${article.title}</a>`);                                             
+            });
+          } else {
+            articlesList.innerHTML = '<li>No Landmarks found nearby.</li>';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching Wikipedia articles on Landmarks:', error);
+          const articlesList = document.getElementById('articles');
+          articlesList.innerHTML = '<li>Error fetching articles on Landmarks.</li>';
+        });
+    }
+  </script>
+
+</body>
+</html>
