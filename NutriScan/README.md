@@ -8,6 +8,8 @@ NutriScan allows you to scan a product barcode using your smartphone's camera an
 
 [Open Food Facts](https://world.openfoodfacts.org/) is the world's largest open source food database, a sort of Wikipedia of Food. Nutrition information for more than 3.6 million products is available on the OFF website. You can access this data through their website, [API, or as a data dump](https://world.openfoodfacts.org/data).
 
+Open Food Facts employs a nutritional rating system that rewards products rich in beneficial nutrients like [fiber](https://indiafoodstats.blogspot.com/2024/09/a-nutritional-breakdown-high-fibre-foods.html) and [protein](https://indiafoodstats.blogspot.com/2024/09/exploring-high-protein-packaged-foods.html), while penalizing those high in less desirable components such as fats, sugars, and sodium.
+
 My sample code scans an **EAN-13 barcode** from a packaged food product and then fetch its:
 *   Name
 *   Image
