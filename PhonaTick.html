@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+             body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .loading {
+            text-align: center;
+            font-size: 1.2em;
+            color: #666;
+            padding: 20px;
+        }
+
+        .word-pair {
+            margin: 10px 0;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .word {
+            font-weight: bold;
+            color: #333;
+            display: inline-block;
+        }
+
+        .pronunciation {
+            color: #666;
+            margin-left: 20px;
+            display: inline-block;
+        }
+
+        @media (max-width: 600px) {
+          body {
+                padding: 10px;
+                font-size: 18px; 
+            }
+            h1 {
+                    font-size: 2em;
+             }
+            .word, .pronunciation {
+                display: block;
+                margin: 5px 0;
+                font-size: 1.1em;
+            }
+
+            .pronunciation {
+                margin-left: 0;              
+            }
+
+            .loading {
+            font-size: 1.3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>PhonaTick</h1>
+    <p><i>Helps you master tricky English pronunciations by turning confusing spellings into easy-to-understand sounds</i></p>
+    <div id="loadingMessage" class="loading">Loading...</div>
+    <div id="wordList"></div>
+
+    <script>
+     async function fetchWords() {
+        try {
+            const wordList = document.getElementById('wordList');
+            const loadingMessage = document.getElementById('loadingMessage');
+            
+            const response = await fetch('https://rightful-veiled-lyre.glitch.me/data.json?sql=select+word%2C+pronunciation+from+aphonetic');
+            const data = await response.json();
+            
+            // Hide loading message once data is loaded
+            loadingMessage.style.display = 'none';
+            
+            // Check if data is an object and has rows property
+            const items = data.rows || [];
+            
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'word-pair';
+                div.innerHTML = `
+                    <span class="word">${item[0]}</span>
+                    <span class="pronunciation">${item[1]}</span>
+                `;
+                wordList.appendChild(div);
+            
+            });
+        } catch (error) {
+            const loadingMessage = document.getElementById('loadingMessage');
+            loadingMessage.textContent = 'Error loading data. Please try again later.';
+            loadingMessage.style.color = '#ff0000';
+            //console.error('Error fetching data:', error);
+        }
+    }
+
+    // Call the function when the page loads
+    fetchWords();
+    </script>
+</body>
+</html>
