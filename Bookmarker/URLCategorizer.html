@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Categorizer</title>
+    <style>
+        /* Basic styling for the page */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            line-height: 1.6;
+        }
+
+        /* Styling for the container */
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Styling for the heading */
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        /* Styling for the text input */
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        /* Styling for the button */
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        /* Styling for the result display */
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #e6f4ea;
+            display: none;
+        }
+
+        /* Show the result when it's visible */
+        .result.visible {
+            display: block;
+        }
+
+        /* Styling for error messages */
+        .result.error {
+            background-color: #fdeded;
+            color: #5f2120;
+        }
+
+        /* Styling for the loading indicator */
+        .loading {
+            text-align: center;
+            display: none;
+        }
+
+        /* Loading animation */
+        .loading:after {
+            content: '...';
+            animation: dots 1s steps(5, end) infinite;
+        }
+
+        /* Keyframes for the loading animation */
+        @keyframes dots {
+            0%,
+            20% {
+                content: '.';
+            }
+
+            40% {
+                content: '..';
+            }
+
+            60% {
+                content: '...';
+            }
+
+            80%,
+            100% {
+                content: '';
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>URL Categorizer</h1>
+        <input type="text" id="urlInput" placeholder="Enter URL" required>
+        <button id="categorizeBtn">Categorize URL</button>
+        <div id="loading" class="loading">Categorizing</div>
+        <div id="result" class="result">
+            <p><strong>URL:</strong> <span id="resultUrl"></span></p>
+            <p><strong>Category:</strong> <span id="resultCategory"></span></p>
+        </div>
+    </div>
+
+    <script>
+        // This script runs after the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // Get references to various HTML elements
+            const urlInput = document.getElementById('urlInput'); // Input field for the URL
+            const categorizeBtn = document.getElementById('categorizeBtn'); // Button to trigger categorization
+            const loadingDiv = document.getElementById('loading'); // Loading indicator
+            const resultDiv = document.getElementById('result'); // Result container
+            const resultUrlSpan = document.getElementById('resultUrl'); // Span to display the URL
+            const resultCategorySpan = document.getElementById('resultCategory'); // Span to display the category
+            const apiKey = "AIzaSyBnpKoggQBoDct_YkZdEu0iLEhjubspiMM"; // Replace with your actual API key
+
+            // Add an event listener to the button
+            categorizeBtn.addEventListener('click', async () => {
+
+                // Get the URL from the input field and trim any whitespace
+                const url = urlInput.value.trim();
+
+                // Basic validation: Check if the URL is valid
+                if (!url || !url.startsWith('http')) {
+                    alert('Please enter a valid URL starting with http:// or https://');
+                    return; // Exit the function if the URL is invalid
+                }
+
+                // Show loading indicator and hide previous results
+                loadingDiv.style.display = 'block'; // Make the loading indicator visible
+                resultDiv.classList.remove('visible', 'error'); // Hide the result container and remove any error styling
+
+                try {
+                    // Call the categorizeURL function to get the category
+                    const category = await categorizeURL(url);
+
+                    // Update and show results
+                    resultUrlSpan.textContent = url; // Display the URL
+                    resultCategorySpan.textContent = category; // Display the category
+                    resultDiv.classList.add('visible'); // Make the result container visible
+                } catch (error) {
+                    // Handle any errors that occur during the API call
+                    resultUrlSpan.textContent = url; // Display the URL
+                    resultCategorySpan.textContent = `Error: ${error.message}`; // Display the error message
+                    resultDiv.classList.add('visible', 'error'); // Make the result container visible and add error styling
+                } finally {
+                    // Always hide the loading indicator
+                    loadingDiv.style.display = 'none'; // Hide the loading indicator
+                }
+            });
+
+            // Function to categorize the URL using Gemini API
+            async function categorizeURL(url) {
+                // API endpoint for the Gemini model
+                const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                // Prompt to send to the Gemini model
+                const prompt = `Categorize this URL: ${url}. Categories: News, Tech, Ent, Edu, Finance, Health, Sports, Misc. Return category name only.`;
+
+                // Payload for the API request
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }]
+                };
+
+                // Make the API request
+                const response = await fetch(apiEndpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                // Check if the response was successful
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                // Parse the response
+                const data = await response.json();
+
+                // Extract the category from the response
+                const category = data.candidates?.[0]?.content?.parts[0]?.text?.trim();
+
+                // Return the category or an error message
+                return category || "Error";
+            }
+        });
+    </script>
+</body>
+
+</html>
