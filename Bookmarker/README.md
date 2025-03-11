@@ -1,7 +1,9 @@
 # URL Categorizer
-This is a simple web application that categorizes a given URL using the Gemini API.
+This is a simple web application that categorizes a given URL using the Gemini API. 
 
 ![urlcat](https://github.com/user-attachments/assets/3a4265f7-e6b6-42a5-9877-dfd128d74771)
+
+Using the helper function shown in the sample, I plan to enhance a [Bookmarker Bookmarklet](https://mvark.blogspot.com/2021/05/bookmarker-bookmarklet.html) I built earlier by integrating AI to automatically categorize URLs and save them to Google Sheets.
 
 ## Features
 
@@ -22,7 +24,7 @@ This is a simple web application that categorizes a given URL using the Gemini A
 
 1.  Clone the repository or download the `URLCategorizer.html` file.
 2.  Open the `URLCategorizer.html` file in a text editor.
-3.  Replace `"AI"` with your actual Gemini API key.
+3.  Replace the placeholder with your actual Gemini API key in line # 130.
     ```javascript
     const apiKey = "YOUR_API_KEY"; // Replace with your actual API key
     ```
