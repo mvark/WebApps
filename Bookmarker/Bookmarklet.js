@@ -1,0 +1,1 @@
+javascript:(function(){var w=window.open('<GOOGLE_APPS_SCRIPT_WEB_APP_URL>/exec?url=%27+encodeURIComponent(location.href)+%27&title=%27+encodeURIComponent(document.title),%27bookmarker%27);setTimeout(function(){w.close()},3000);})();
