@@ -1,6 +1,6 @@
   # People Tracker Bookmarklet
 
-This simple bookmarklet allows you to quickly save the URL, title, and your personal notes about any webpage (like a social media profile) directly into a Google Sheet. It's a quick way to keep track of people or resources you encounter online.
+This simple bookmarklet allows you to quickly save the URL, title, and your personal notes about any webpage (like a social media profile) directly into a Google Sheet. It's a quick way to keep track of people or resources you encounter online. It is adapted from a previous [bookmarklet that acts as a replacement for the now deprecated Google Bookmarks](https://mvark.blogspot.com/2021/05/bookmarker-bookmarklet.html)
 
 ## How it Works
 
