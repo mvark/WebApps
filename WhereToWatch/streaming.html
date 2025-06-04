@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movie Lookup</title>
+  <style>
+    /* Minimalistic styling with flex layout for result items */
+    body { background: #fff; margin: 0; padding: 10px; font-family: sans-serif; }
+    .search-section { margin-bottom: 10px; }
+    input, button { font-size: 14px; padding: 5px; }
+    .result-item { display: flex; align-items: flex-start; margin-bottom: 10px; }
+    .thumbnail { width: 92px; height: auto; margin-right: 10px; }
+    .details { line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div class="search-section">
+    <input type="text" id="searchInput" placeholder="Enter movie name" />
+    <button id="searchButton">Search</button>
+  </div>
+  <div id="results"></div>
+
+  <script>
+    // TMDB Configuration – Replace API_KEY with your actual key.
+    const API_KEY = 'YOUR_API_KEY_HERE';
+    const BASE_URL = 'https://api.themoviedb.org/3';
+    const THUMBNAIL_BASE_URL = 'https://image.tmdb.org/t/p/w92';
+    
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const resultsDiv = document.getElementById('results');
+    
+    // Generates a simple provider link. Uses "Watch on:" label when a link is available.
+    function getProviderLink(provider, title) {
+      let baseUrl = '';
+      const lower = provider.toLowerCase();
+      if(lower.includes("prime")) {
+        baseUrl = "https://www.primevideo.com/search/?phrase=";
+      } else if(lower.includes("sony")) {
+        baseUrl = "https://www.sonyliv.com/search?q=";
+      } else if(lower.includes("zee")) {
+        baseUrl = "https://www.zee5.com/search?q=";
+      } else if(lower.includes("netflix")) {
+        baseUrl = "https://www.netflix.com/search?q=";
+      } else if(lower.includes("hotstar")) {
+        baseUrl = "https://www.hotstar.com/in/explore?search_query="; 
+      }
+      return baseUrl ? `<a href="${baseUrl}${encodeURIComponent(title)}" target="_blank">${provider}</a>` : provider;
+    }
+    
+    // Sort by release date descending
+    function sortByYear(a, b) {
+      const dateA = new Date(a.release_date || 0);
+      const dateB = new Date(b.release_date || 0);
+      return dateB - dateA;
+    }
+    
+    // Event listeners for search button click and Enter key press
+    searchButton.addEventListener('click', searchContent);
+    searchInput.addEventListener('keypress', (event) => {
+      if(event.key === 'Enter') { searchContent(); }
+    });
+    
+    async function searchContent() {
+      const query = searchInput.value.trim();
+      if (!query) {
+        resultsDiv.innerHTML = '<p style="color:red;">Please enter a movie name.</p>';
+        return;
+      }
+      resultsDiv.innerHTML = '<p>Searching...</p>';
+      
+      try {
+        // Fetch the first page of movie results
+        const movieResponse = await fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}`);
+        const movieData = await movieResponse.json();
+        let items = movieData.results || [];
+        
+        if (items.length === 0) {
+          resultsDiv.innerHTML = '<p style="color:red;">No movie results found.</p>';
+          return;
+        }
+        
+        // Sort the results by release date (newer first) and limit to 20
+        items.sort(sortByYear);
+        items = items.slice(0, 20);
+        
+        resultsDiv.innerHTML = ''; // Clear previous results
+        
+        let resultsShown = 0;
+        for (const item of items) {
+          const added = await displayContentDetails(item);
+          if (added) resultsShown++;
+        }
+        
+        if (resultsShown === 0 && resultsDiv.innerHTML.trim() === '') {
+          resultsDiv.innerHTML = '<p style="color:red;">No results are available from any provider for this movie.</p>';
+        }
+      }
+      catch(error) {
+        console.error('Search failed:', error);
+        resultsDiv.innerHTML = `<p style="color:red;">An error occurred: ${error.message}</p>`;
+      }
+    }
+    
+    async function displayContentDetails(item) {
+      try {
+        // Use the search result for movie details
+        const id = item.id;
+    
+        // Get streaming providers
+        const providersResponse = await fetch(`${BASE_URL}/movie/${id}/watch/providers?api_key=${API_KEY}`);
+        const providersData = await providersResponse.json();
+        const indiaProviders = providersData.results && providersData.results.IN;
+        
+        // Only show the movie if a provider is available (flatrate)
+        if (!(indiaProviders && indiaProviders.flatrate && indiaProviders.flatrate.length > 0)) {
+          return false;
+        }
+    
+        const title = item.title;
+        const releaseDate = item.release_date;
+        const year = releaseDate ? new Date(releaseDate).getFullYear() : 'N/A';
+        // Runtime is ignored since it's not available in the search endpoint
+        const runtime = 'N/A';
+        const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+        const overview = item.overview || 'No overview available.';
+        const thumbnail = item.poster_path ? (THUMBNAIL_BASE_URL + item.poster_path) : 'https://placehold.co/92x138/E0E0E0/333333?text=No+Image';
+        
+        // Build provider links
+        let providerLinks = indiaProviders.flatrate
+                             .map(p => getProviderLink(p.provider_name, title))
+                             .join(' | ');
+        
+        // Build text-based result with thumbnail on left and details on right
+        const resultHTML = `
+          <div class="result-item">
+            <img class="thumbnail" src="${thumbnail}" alt="${title} Thumbnail">
+            <div class="details">
+              <strong>${title} (${year})</strong> | Rating: ${rating}/10<br>
+              Overview: ${overview}<br>
+              Watch on: ${providerLinks}
+            </div>
+          </div>
+        `;
+        resultsDiv.insertAdjacentHTML('beforeend', resultHTML);
+        return true;
+      } catch (error) {
+        console.error(`Error fetching provider data for movie ID ${item.id}:`, error);
+        return false;
+      }
+    }
+  </script>
+</body>
+</html>
