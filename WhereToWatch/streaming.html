@@ -2,19 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Movie Lookup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Where to Watch</title>
   <style>
     /* Minimalistic styling with flex layout for result items */
     body { background: #fff; margin: 0; padding: 10px; font-family: sans-serif; }
     .search-section { margin-bottom: 10px; }
     input, button { font-size: 14px; padding: 5px; }
-    .result-item { display: flex; align-items: flex-start; margin-bottom: 10px; }
-    .thumbnail { width: 92px; height: auto; margin-right: 10px; }
-    .details { line-height: 1.4; }
   </style>
 </head>
 <body>
+  <h1>Where to Watch</h1>
   <div class="search-section">
     <input type="text" id="searchInput" placeholder="Enter movie name" />
     <button id="searchButton">Search</button>
@@ -23,9 +21,8 @@
 
   <script>
     // TMDB Configuration – Replace API_KEY with your actual key.
-    const API_KEY = 'YOUR_API_KEY_HERE';
+    const API_KEY = 'YOUR_API_KEY';
     const BASE_URL = 'https://api.themoviedb.org/3';
-    const THUMBNAIL_BASE_URL = 'https://image.tmdb.org/t/p/w92';
     
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
@@ -125,7 +122,6 @@
         const runtime = 'N/A';
         const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
         const overview = item.overview || 'No overview available.';
-        const thumbnail = item.poster_path ? (THUMBNAIL_BASE_URL + item.poster_path) : 'https://placehold.co/92x138/E0E0E0/333333?text=No+Image';
         
         // Build provider links
         let providerLinks = indiaProviders.flatrate
@@ -134,15 +130,11 @@
         
         // Build text-based result with thumbnail on left and details on right
         const resultHTML = `
-          <div class="result-item">
-            <img class="thumbnail" src="${thumbnail}" alt="${title} Thumbnail">
             <div class="details">
               <strong>${title} (${year})</strong> | TMDB Rating: ${rating}/10<br>
               Overview: ${overview}<br>
               Watch on: ${providerLinks}
-            </div>
-          </div>
-        `;
+            </div>`;
         resultsDiv.insertAdjacentHTML('beforeend', resultHTML);
         return true;
       } catch (error) {
