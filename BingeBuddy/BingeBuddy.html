@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Movie & TV Show Search</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 10px; 
+      font-family: sans-serif; 
+      line-height: 1.4;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      text-align: center;
+      margin: 10px 0 20px 0;
+    }
+    
+    .search-section { 
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    select, input, button { 
+      font-size: 14px; 
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    
+    input {
+      width: 250px;
+      min-width: 150px;
+    }
+    
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    
+    .content-result {
+      margin: 15px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      display: flex;
+      gap: 15px;
+    }
+    
+    .content-thumbnail img {
+      width: 92px;
+      height: 138px;
+      object-fit: cover;
+      border-radius: 3px;
+    }
+    
+    .content-details {
+      flex: 1;
+    }
+    
+    .content-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    
+    .content-info div {
+      margin: 5px 0;
+    }
+    
+    .overview {
+      background: #f8f8f8;
+      padding: 10px;
+      margin: 10px 0;
+      border-left: 3px solid #007bff;
+      font-style: italic;
+    }
+    
+    .cast-member, .crew-member {
+      color: #007bff;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    
+    .streaming-link {
+      display: inline-block;
+      background: #28a745;
+      color: white;
+      padding: 3px 8px;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 11px;
+      margin: 2px 3px;
+    }
+    
+    .external-links {
+      margin: 5px 0;
+    }
+    
+    .external-link {
+      display: inline-block;
+      background: #6c757d;
+      color: white;
+      padding: 2px 8px;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 10px;
+      margin: 2px 3px;
+    }
+    
+    .external-link.tmdb {
+      background: #032541;
+    }
+    
+    .external-link.imdb {
+      background: #f5c518;
+      color: #000;
+    }
+    
+    .person-result {
+      margin: 15px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      display: flex;
+      gap: 15px;
+    }
+    
+    .person-thumbnail img {
+      width: 92px;
+      height: 138px;
+      object-fit: cover;
+      border-radius: 3px;
+    }
+    
+    .person-details {
+      flex: 1;
+    }
+    
+    .person-name {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    
+    .movie-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .movie-item {
+      background: #f8f8f8;
+      padding: 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    .movie-item:hover {
+      background: #e8e8e8;
+    }
+    
+    .movie-item-links {
+      margin-top: 3px;
+    }
+    
+    .content-type-badge {
+      display: inline-block;
+      background: #17a2b8;
+      color: white;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      margin-left: 8px;
+    }
+    
+    .tv-badge {
+      background: #dc3545;
+    }
+    
+    .loading, .error, .no-results {
+      text-align: center;
+      margin: 20px 0;
+    }
+    
+    .error {
+      color: #dc3545;
+      background: #f8d7da;
+      padding: 8px;
+      border-radius: 3px;
+    }
+    
+    @media (max-width: 600px) {
+      .content-result, .person-result {
+        flex-direction: column;
+      }
+      
+      input {
+        width: 100%;
+        max-width: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Movie & TV Show Search</h1>
+    
+    <div class="search-section">
+      <select id="searchType">
+        <option value="multi" selected>Movies & TV Shows</option>
+        <option value="person">Celebrity</option>
+      </select>
+      <input type="text" id="searchInput" placeholder="Enter movie, TV show, or celebrity name" />
+      <button id="searchButton">Search</button>
+    </div>
+    
+    <div id="results"></div>
+  </div>
+
+  <script>
+    // TMDB Configuration
+    const API_KEY = 'your_tmdb_api_key_here';
+    const BASE_URL = 'https://api.themoviedb.org/3';
+    const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w92';
+    const POSTER_BASE_URL = 'https://image.tmdb.org/t/p/w92';
+    
+    const searchType = document.getElementById('searchType');
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const resultsDiv = document.getElementById('results');
+    
+    // Check for URL parameters on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const searchQuery = urlParams.get('search');
+      
+      if (searchQuery) {
+        searchInput.value = decodeURIComponent(searchQuery);
+        performSearch();
+      }
+    });
+    
+    // Update placeholder based on search type
+    searchType.addEventListener('change', function() {
+      if (this.value === 'multi') {
+        searchInput.placeholder = 'Enter movie, TV show, or celebrity name';
+      } else {
+        searchInput.placeholder = 'Enter celebrity name';
+      }
+    });
+    
+    // Event listeners
+    searchButton.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        performSearch();
+      }
+    });
+    
+    // Generate provider links for streaming services
+    function getProviderLink(provider, title) {
+      let baseUrl = '';
+      const lower = provider.toLowerCase();
+      
+      if (lower.includes("prime")) {
+        baseUrl = "https://www.primevideo.com/search/?phrase=";
+      } else if (lower.includes("sony")) {
+        baseUrl = "https://www.sonyliv.com/search?q=";
+      } else if (lower.includes("zee")) {
+        baseUrl = "https://www.zee5.com/search?q=";
+      } else if (lower.includes("netflix")) {
+        baseUrl = "https://www.netflix.com/search?q=";
+      } else if (lower.includes("hotstar")) {
+        baseUrl = "https://www.hotstar.com/in/explore?search_query=";
+      } else if (lower.includes("jio")) {
+        baseUrl = "https://www.jiocinema.com/search?q=";
+      } else if (lower.includes("disney")) {
+        baseUrl = "https://www.hotstar.com/in/explore?search_query=";
+      }
+      else if (lower.includes("aha")) {   
+        baseUrl = "https://www.aha.video/search?q=";
+        }
+      return baseUrl ? `<a href="${baseUrl}${encodeURIComponent(title)}" target="_blank" class="streaming-link">${provider}</a>` : 
+                      `<span class="streaming-link" style="background: #6c757d;">${provider}</span>`;
+    }
+    
+    // Convert runtime from minutes to hours and minutes
+    function formatRuntime(minutes) {
+      if (!minutes) return 'N/A';
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours}h ${mins.toString().padStart(2, '0')}m`;
+    }
+    
+    // Format date to DD/MM/YYYY
+    function formatDate(dateString) {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB');
+    }
+    
+    // Get thumbnail URL with fallback
+    function getThumbnailUrl(path, isProfile = false) {
+      if (!path) {
+        return isProfile ? 
+          'https://via.placeholder.com/92x138/e0e0e0/666666?text=No+Image' :
+          'https://via.placeholder.com/92x138/e0e0e0/666666?text=No+Poster';
+      }
+      return IMAGE_BASE_URL + path;
+    }
+    
+    // Generate external links
+    function generateExternalLinks(id, title, mediaType) {
+      const tmdbUrl = `https://www.themoviedb.org/${mediaType}/${id}`;
+      const imdbSearchUrl = `https://m.imdb.com/find/?q=${encodeURIComponent(title)}`;
+      
+      return `
+        <div class="external-links">
+          <a href="${tmdbUrl}" target="_blank" class="external-link tmdb">TMDB</a>
+          <a href="${imdbSearchUrl}" target="_blank" class="external-link imdb">IMDB</a>
+        </div>
+      `;
+    }
+    
+    // Main search function
+    async function performSearch() {
+      const query = searchInput.value.trim();
+      const type = searchType.value;
+      
+      if (!query) {
+        resultsDiv.innerHTML = '<div class="error">Please enter a search term.</div>';
+        return;
+      }
+      
+      resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+      
+      try {
+        if (type === 'person') {
+          await searchPersonalities(query);
+        } else {
+          await searchContent(query, type);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+        resultsDiv.innerHTML = `<div class="error">An error occurred: ${error.message}</div>`;
+      }
+    }
+    
+    // Search for movies and/or TV shows
+    async function searchContent(query, type) {
+      let endpoint = '';
+      
+      switch(type) {
+        case 'multi':
+          endpoint = 'search/multi';
+          break;
+        case 'movie':
+          endpoint = 'search/movie';
+          break;
+        case 'tv':
+          endpoint = 'search/tv';
+          break;
+      }
+      
+      const response = await fetch(`${BASE_URL}/${endpoint}?api_key=${API_KEY}&query=${encodeURIComponent(query)}&region=IN`);
+      const data = await response.json();
+      
+      if (!data.results || data.results.length === 0) {
+        resultsDiv.innerHTML = '<div class="no-results">No results found.</div>';
+        return;
+      }
+      
+      // Filter out person results from multi search and sort by popularity
+      let results = data.results.filter(item => item.media_type !== 'person' || type !== 'multi');
+      
+      results = results
+        .sort((a, b) => {
+          // Sort by popularity (higher first), then by release date
+          if (b.popularity !== a.popularity) {
+            return b.popularity - a.popularity;
+          }
+          const dateA = new Date(a.release_date || a.first_air_date || 0);
+          const dateB = new Date(b.release_date || b.first_air_date || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 50);
+      
+      resultsDiv.innerHTML = '';
+      
+      for (const item of results) {
+        if (item.media_type === 'tv' || type === 'tv') {
+          await displayTVShowDetails(item);
+        } else {
+          await displayMovieDetails(item);
+        }
+      }
+    }
+    
+    // Search for movie personalities
+    async function searchPersonalities(query) {
+      const response = await fetch(`${BASE_URL}/search/person?api_key=${API_KEY}&query=${encodeURIComponent(query)}&region=IN`);
+      const data = await response.json();
+      
+      if (!data.results || data.results.length === 0) {
+        resultsDiv.innerHTML = '<div class="no-results">No celebrities found.</div>';
+        return;
+      }
+      
+      resultsDiv.innerHTML = '';
+      
+      // Limit to top 5 persons
+      const persons = data.results.slice(0, 5);
+      
+      for (const person of persons) {
+        await displayPersonDetails(person);
+      }
+    }
+    
+    // Display detailed movie information
+    async function displayMovieDetails(movie) {
+      try {
+        // Get detailed movie information
+        const detailsResponse = await fetch(`${BASE_URL}/movie/${movie.id}?api_key=${API_KEY}&append_to_response=credits&region=IN`);
+        const details = await detailsResponse.json();
+        
+        // Get streaming providers
+        const providersResponse = await fetch(`${BASE_URL}/movie/${movie.id}/watch/providers?api_key=${API_KEY}&region=IN`);
+        const providersData = await providersResponse.json();
+        const indiaProviders = providersData.results && providersData.results.IN;
+        
+        // Build streaming links
+        let streamingLinks = 'Not Available';
+        if (indiaProviders && indiaProviders.flatrate && indiaProviders.flatrate.length > 0) {
+          streamingLinks = indiaProviders.flatrate
+            .map(p => getProviderLink(p.provider_name, details.title))
+            .join(' ');
+        }
+        
+        // Get cast (top 10)
+        const cast = details.credits.cast.slice(0, 10);
+        const castHtml = cast.map(member => 
+          `<span class="cast-member" onclick="searchForPerson('${member.name}')">${member.name}</span>`
+        ).join(', ');
+        
+        // Get crew (directors, producers, writers)
+        const crew = details.credits.crew;
+        const directors = crew.filter(c => c.job === 'Director');
+        const producers = crew.filter(c => c.job === 'Producer');
+        const writers = crew.filter(c => c.job === 'Writer' || c.job === 'Screenplay');
+        
+        const crewHtml = [
+          ...directors.map(d => `Director: <span class="crew-member" onclick="searchForPerson('${d.name}')">${d.name}</span>`),
+          ...producers.slice(0, 5).map(p => `Producer: <span class="crew-member" onclick="searchForPerson('${p.name}')">${p.name}</span>`),
+          ...writers.slice(0, 3).map(w => `Writer: <span class="crew-member" onclick="searchForPerson('${w.name}')">${w.name}</span>`)
+        ].join(',<br>');
+        
+        const externalLinks = generateExternalLinks(details.id, details.title, 'movie');
+        
+        const movieHtml = `
+          <div class="content-result">
+            <div class="content-thumbnail">
+              <img src="${getThumbnailUrl(details.poster_path)}" alt="${details.title}" />
+            </div>
+            <div class="content-details">
+              <div class="content-title">${details.title}<span class="content-type-badge">Movie</span></div>
+              ${externalLinks}
+              <div class="content-info">
+                <div><strong>Release Date:</strong> ${formatDate(details.release_date)}</div>
+                <div><strong>Duration:</strong> ${formatRuntime(details.runtime)} | <strong>Streaming on:</strong> ${streamingLinks}</div>
+              </div>
+              <div class="overview">
+                <strong>Overview:</strong> ${details.overview || 'No overview available.'}
+              </div>
+              <div class="content-info">
+                <div><strong>Cast:</strong> ${castHtml || 'Not available'}</div>
+                <div><strong>Crew -</strong><br>${crewHtml || 'Not available'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        resultsDiv.insertAdjacentHTML('beforeend', movieHtml);
+        
+      } catch (error) {
+        console.error(`Error fetching details for movie ${movie.id}:`, error);
+      }
+    }
+    
+    // Display detailed TV show information
+    async function displayTVShowDetails(show) {
+      try {
+        // Get detailed TV show information
+        const detailsResponse = await fetch(`${BASE_URL}/tv/${show.id}?api_key=${API_KEY}&append_to_response=credits&region=IN`);
+        const details = await detailsResponse.json();
+        
+        // Get streaming providers
+        const providersResponse = await fetch(`${BASE_URL}/tv/${show.id}/watch/providers?api_key=${API_KEY}&region=IN`);
+        const providersData = await providersResponse.json();
+        const indiaProviders = providersData.results && providersData.results.IN;
+        
+        // Build streaming links
+        let streamingLinks = 'Not Available';
+        if (indiaProviders && indiaProviders.flatrate && indiaProviders.flatrate.length > 0) {
+          streamingLinks = indiaProviders.flatrate
+            .map(p => getProviderLink(p.provider_name, details.name))
+            .join(' ');
+        }
+        
+        // Get cast (top 10)
+        const cast = details.credits.cast.slice(0, 10);
+        const castHtml = cast.map(member => 
+          `<span class="cast-member" onclick="searchForPerson('${member.name}')">${member.name}</span>`
+        ).join(', ');
+        
+        // Get crew (creators, producers, writers)
+        const crew = details.credits.crew;
+        const creators = details.created_by || [];
+        const producers = crew.filter(c => c.job === 'Producer' || c.job === 'Executive Producer');
+        const writers = crew.filter(c => c.job === 'Writer' || c.job === 'Story');
+        
+        const crewHtml = [
+          ...creators.map(c => `Creator: <span class="crew-member" onclick="searchForPerson('${c.name}')">${c.name}</span>`),
+          ...producers.slice(0, 5).map(p => `Producer: <span class="crew-member" onclick="searchForPerson('${p.name}')">${p.name}</span>`),
+          ...writers.slice(0, 3).map(w => `Writer: <span class="crew-member" onclick="searchForPerson('${w.name}')">${w.name}</span>`)
+        ].join(',<br>');
+        
+        const externalLinks = generateExternalLinks(details.id, details.name, 'tv');
+        
+        const showHtml = `
+          <div class="content-result">
+            <div class="content-thumbnail">
+              <img src="${getThumbnailUrl(details.poster_path)}" alt="${details.name}" />
+            </div>
+            <div class="content-details">
+              <div class="content-title">${details.name}<span class="content-type-badge tv-badge">TV Show</span></div>
+              ${externalLinks}
+              <div class="content-info">
+                <div><strong>First Air Date:</strong> ${formatDate(details.first_air_date)}</div>
+                <div><strong>Seasons:</strong> ${details.number_of_seasons} | <strong>Episodes:</strong> ${details.number_of_episodes} | <strong>Streaming on:</strong> ${streamingLinks}</div>
+              </div>
+              <div class="overview">
+                <strong>Overview:</strong> ${details.overview || 'No overview available.'}
+              </div>
+              <div class="content-info">
+                <div><strong>Cast:</strong> ${castHtml || 'Not available'}</div>
+                <div><strong>Crew -</strong><br>${crewHtml || 'Not available'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        resultsDiv.insertAdjacentHTML('beforeend', showHtml);
+        
+      } catch (error) {
+        console.error(`Error fetching details for TV show ${show.id}:`, error);
+      }
+    }
+    
+    // Display person details with their movies and TV shows
+    async function displayPersonDetails(person) {
+      try {
+        // Get person details and combined credits
+        const detailsResponse = await fetch(`${BASE_URL}/person/${person.id}?api_key=${API_KEY}&append_to_response=combined_credits&region=IN`);
+        const details = await detailsResponse.json();
+        
+        // Combine cast and crew from movies and TV shows
+        const allContent = [
+          ...(details.combined_credits.cast || []),
+          ...(details.combined_credits.crew || [])
+        ];
+        
+        // Remove duplicates and sort by release date (newest first)
+        const uniqueContent = allContent
+          .filter((item, index, self) => 
+            index === self.findIndex(i => i.id === item.id && i.media_type === item.media_type)
+          )
+          .sort((a, b) => {
+            const dateA = new Date(a.release_date || a.first_air_date || 0);
+            const dateB = new Date(b.release_date || b.first_air_date || 0);
+            return dateB - dateA;
+          })
+          .slice(0, 200);
+        
+        const contentHtml = uniqueContent.map(item => {
+          const title = item.title || item.name;
+          const date = item.release_date || item.first_air_date;
+          const mediaType = item.media_type === 'tv' ? 'tv' : 'movie';
+          const externalLinks = generateExternalLinks(item.id, title, mediaType);
+          
+          return `
+            <div class="movie-item" onclick="searchForContent('${title}', '${mediaType}')">
+              <strong>${title}</strong>
+              <span class="content-type-badge ${mediaType === 'tv' ? 'tv-badge' : ''}">${mediaType.toUpperCase()}</span><br>
+              <small>${formatDate(date)}</small>
+              <div class="movie-item-links">
+                ${externalLinks}
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        const externalLinks = generateExternalLinks(details.id, details.name, 'person');
+        
+        const personHtml = `
+          <div class="person-result">
+            <div class="person-thumbnail">
+              <img src="${getThumbnailUrl(details.profile_path, true)}" alt="${details.name}" />
+            </div>
+            <div class="person-details">
+              <div class="person-name">${details.name}</div>
+              ${externalLinks}
+              <div><strong>Known For:</strong> ${details.known_for_department || 'Acting'}</div>
+              ${details.biography ? `<div style="margin: 10px 0;"><strong>Biography:</strong> ${details.biography.substring(0, 300)}${details.biography.length > 300 ? '...' : ''}</div>` : ''}
+              <div><strong>Movies & TV Shows (${uniqueContent.length}):</strong></div>
+              <div class="movie-list">
+                ${contentHtml}
+              </div>
+            </div>
+          </div>
+        `;
+        
+        resultsDiv.insertAdjacentHTML('beforeend', personHtml);
+        
+      } catch (error) {
+        console.error(`Error fetching details for person ${person.id}:`, error);
+      }
+    }
+    
+    // Function to search for a person (called when clicking cast/crew names)
+    function searchForPerson(name) {
+      searchType.value = 'person';
+      searchInput.value = name;
+      searchInput.placeholder = 'Enter celebrity name';
+      performSearch();
+    }
+    
+    // Function to search for content (called when clicking movie/show titles)
+    function searchForContent(title, mediaType = 'multi') {
+      // Always set to 'multi' since that's the only content search option
+      searchType.value = 'multi';
+      searchInput.placeholder = 'Enter movie, TV show, or celebrity name';
+      searchInput.value = title;
+      performSearch();
+    }
+  </script>
+</body>
+</html>
