@@ -13,7 +13,7 @@ This is a simple Flask app that uses the **Sonar API from Perplexity.ai** to fet
 
 ## Demo Screenshot
 
-![screenshot](screenshot.png) <!-- You can upload a screenshot if needed -->
+![screenshot](https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgGNpfSF83UJ4hoYhjA_0_96yii8sVGl725bbV-PKT-YJiNEDZx-mT0AdVXL8dDnecy1gK4jlRMBL3QTZz2128LzzeWSpVQj7Zv30UHtWHuGsXEEQ8D5q-D3faVJK70_JBLRLJ1uSVfui-wXG_nf5Gby4UzOOG2IluS7qVETugRGjm7c2obROtQ/w640-h264-rw/name.JPG) <!-- You can upload a screenshot if needed -->
 
 ---
 
