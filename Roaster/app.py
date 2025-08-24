@@ -74,11 +74,11 @@ def query_sonar_api(prompt):
     except requests.exceptions.RequestException as e:
         return f"Sonar API request failed: {e}"
 
-st.title("GitHub User Roaster with Sonar AI 🔥")
+st.title("GitHub User Roaster with Perplexity AI's Sonar 🔥")
 
 username = st.text_input("Enter a GitHub username")
 
-if st.button("Roast Me!"):
+if st.button("Roast!"):
     if not username:
         st.warning("Please enter a username!")
     else:
