@@ -2,52 +2,43 @@ import streamlit as st
 import requests
 import os
 
-# Read Groq API key from Streamlit Secrets
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+# Read API key from Streamlit Secrets
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def query_groq(name: str) -> str:
-    """Query Groq API with a prompt about a given name"""
-    if not GROQ_API_KEY:
-        return "Error: GROQ_API_KEY not found. Please add it in Streamlit secrets."
-
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
-
-    prompt = f"Share some interesting origins, meanings, or cultural facts about the name '{name}'. Keep it fun and conversational."
-
     payload = {
         "model": "openai/gpt-oss-20b",
         "messages": [
             {"role": "system", "content": "You are a fun and informative assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": (
+                f"Share some interesting origins, meanings, "
+                f"or cultural facts about the name '{name}'."
+            )}
         ],
-        "max_tokens": 300,
-        "temperature": 0.7
+        "temperature": 0.7,
+        "max_tokens": 200
     }
 
-    try:
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "No response found.")
-    except Exception as e:
-        return f"Error calling Groq API: {e}"
+    resp = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
+    if resp.status_code == 200:
+        data = resp.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    else:
+        return f"Groq API error {resp.status_code}: {resp.text}"
 
-# -------------------- Streamlit UI --------------------
-
-st.title("🔤 What's in a Name? (Groq-powered)")
-
+# Streamlit UI
+st.title("What's in a Name? (via Groq)")
 name = st.text_input("Enter a name:")
-
 if st.button("Get Fun Fact"):
     if name.strip():
-        with st.spinner("Asking Groq..."):
+        with st.spinner("Consulting Groq..."):
             result = query_groq(name.strip())
-        st.success("Here’s what I found:")
-        st.write(result)
+        st.markdown(f"**Fun Fact:**\n\n{result}")
     else:
-        st.warning("Please enter a name to continue.")
+        st.error("Please enter a name!")
