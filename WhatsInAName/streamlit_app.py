@@ -5,7 +5,7 @@ import os
 # Read Groq API key from Streamlit Secrets
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 
-GROQ_API_URL = "https://api.groq.com/v1/chat/completions"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def query_groq(name: str) -> str:
     """Query Groq API with a prompt about a given name"""
