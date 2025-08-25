@@ -2,20 +2,37 @@ import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 import requests
 import os
+import re
 
-# Read API key securely from Streamlit Cloud Secrets
+# Read API key securely from Streamlit Cloud Secrets (Settings → Secrets)
 API_KEY = os.environ.get("SONAR_API_KEY")
-
 SONAR_API_URL = "https://api.perplexity.ai/chat/completions"
 
+def extract_video_id(url_or_id: str) -> str:
+    """Extract a YouTube video ID from a full URL or return the input if it's already an ID."""
+    text = url_or_id.strip()
+    patterns = [
+        r"v=([^&]+)",                          # https://www.youtube.com/watch?v=VIDEO_ID
+        r"youtu\.be/([^?&/]+)",               # https://youtu.be/VIDEO_ID
+        r"youtube\.com/embed/([^?&/]+)"       # https://www.youtube.com/embed/VIDEO_ID
+    ]
+    for p in patterns:
+        m = re.search(p, text)
+        if m:
+            return m.group(1)
+    # If no pattern matched, assume user pasted just the ID
+    return text
 
-def query_perplexity(prompt, transcript_text):
-    """
-    Sends a prompt + transcript to the Perplexity Sonar API.
-    Returns the API's response.
-    """
+@st.cache_data(show_spinner=False)
+def fetch_transcript(video_id: str):
+    """Fetch the transcript using the instance method .fetch()."""
+    api = YouTubeTranscriptApi()
+    return api.fetch(video_id)
+
+def query_perplexity(prompt: str, transcript_text: str) -> str:
+    """Send prompt + transcript to Perplexity Sonar API and return the response text."""
     if not API_KEY:
-        return "Error: SONAR_API_KEY not set in Streamlit Secrets!"
+        return "Error: SONAR_API_KEY not set in Streamlit Secrets."
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -32,43 +49,44 @@ def query_perplexity(prompt, transcript_text):
         "max_tokens": 500
     }
 
-    response = requests.post(SONAR_API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
-        return response.json().get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+    try:
+        resp = requests.post(SONAR_API_URL, headers=headers, json=payload, timeout=60)
+    except requests.RequestException as e:
+        return f"Network error calling Sonar API: {e}"
+
+    if resp.status_code == 200:
+        return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "No response.")
     else:
-        return f"API Error {response.status_code}: {response.text}"
+        return f"API Error {resp.status_code}: {resp.text}"
 
-
-# ---- Streamlit UI ----
+# ---------------- Streamlit UI ----------------
 st.title("🎥 YouTube Transcript Summarizer (Perplexity Sonar AI)")
 
-video_url = st.text_input("Enter a YouTube video URL:")
-prompt = st.text_area("Enter your instruction (e.g., 'Summarize this transcript:')", 
-                      "Summarize this transcript:")
+video_input = st.text_input("Enter a YouTube URL or Video ID:")
+prompt = st.text_area("Your instruction", "Summarize this transcript:")
 
 if st.button("Generate Summary"):
-    if not video_url:
-        st.warning("Please enter a valid YouTube video URL!")
+    if not video_input.strip():
+        st.warning("Please enter a YouTube URL or video ID.")
     else:
-        try:
-            # Extract video ID from URL
-            if "v=" in video_url:
-                video_id = video_url.split("v=")[1].split("&")[0]
-            else:
-                st.error("Invalid YouTube URL format. Use a standard YouTube link.")
-                st.stop()
+        video_id = extract_video_id(video_input)
+        with st.spinner("Fetching transcript..."):
+            try:
+                transcript = fetch_transcript(video_id)  # <-- uses .fetch() as requested
+                # The transcript is typically a list of dicts with 'text'
+                transcript_text = "\n".join([chunk.get("text", "") for chunk in transcript])
 
-            with st.spinner("Fetching transcript and querying Sonar AI..."):
-                transcript = YouTubeTranscriptApi().get_transcript(video_id)
-                transcript_text = "\n".join([entry["text"] for entry in transcript])
+                if not transcript_text.strip():
+                    st.error("Transcript fetched but appears empty.")
+                else:
+                    st.subheader("Transcript Preview")
+                    st.write(transcript_text[:800] + ("..." if len(transcript_text) > 800 else ""))
 
-                # Show a preview of transcript
-                st.subheader("Transcript Preview")
-                st.write(transcript_text[:500] + "...")
+                    with st.spinner("Asking Sonar AI..."):
+                        result = query_perplexity(prompt, transcript_text)
 
-                result = query_perplexity(prompt, transcript_text)
-                st.subheader("AI Generated Summary")
-                st.markdown(result)
+                    st.subheader("AI Result")
+                    st.markdown(result)
 
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+            except Exception as e:
+                st.error(f"Transcript error: {e}")
