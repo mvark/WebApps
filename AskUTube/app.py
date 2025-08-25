@@ -1,60 +1,74 @@
-import gradio as gr
+import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 import requests
-import re
+import os
 
-def extract_video_id(input_str):
+# Read API key securely from Streamlit Cloud Secrets
+API_KEY = os.environ.get("SONAR_API_KEY")
+
+SONAR_API_URL = "https://api.perplexity.ai/chat/completions"
+
+
+def query_perplexity(prompt, transcript_text):
     """
-    Extracts YouTube video ID from either a video ID or full URL.
+    Sends a prompt + transcript to the Perplexity Sonar API.
+    Returns the API's response.
     """
-    # If it's already a clean video ID
-    if re.fullmatch(r"[a-zA-Z0-9_-]{11}", input_str):
-        return input_str
+    if not API_KEY:
+        return "Error: SONAR_API_KEY not set in Streamlit Secrets!"
 
-    # Try extracting from URL
-    match = re.search(r"(?:v=|\/)([a-zA-Z0-9_-]{11})", input_str)
-    if match:
-        return match.group(1)
-    return None
-
-def summarize_video(video_input, prompt, api_key):
-    video_id = extract_video_id(video_input.strip())
-    if not video_id:
-        return "❌ Invalid YouTube video ID or URL."
-
-    try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        full_text = "\n".join([t["text"] for t in transcript])
-    except Exception as e:
-        return f"❌ Error fetching transcript: {e}"
-
-    payload = {
-        "model": "sonar-small-online",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"{prompt}\n\nTranscript:\n{full_text}"}
-        ]
-    }
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": f"{prompt}\n\nTranscript:\n{transcript_text}"}
+    ]
+    payload = {
+        "model": "sonar",
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
 
-    try:
-        response = requests.post("https://api.perplexity.ai/chat/completions", json=payload, headers=headers)
-        result = response.json()["choices"][0]["message"]["content"]
-        return result
-    except Exception as e:
-        return f"❌ Error calling Sonar API: {e}"
+    response = requests.post(SONAR_API_URL, headers=headers, json=payload)
+    if response.status_code == 200:
+        return response.json().get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+    else:
+        return f"API Error {response.status_code}: {response.text}"
 
-gr.Interface(
-    fn=summarize_video,
-    inputs=[
-        gr.Textbox(label="YouTube Video ID or URL"),
-        gr.Textbox(label="Custom Prompt", placeholder="Summarize the video, list key takeaways, etc."),
-        gr.Textbox(label="Sonar API Key", type="password"),
-    ],
-    outputs="text",
-    title="🎬 YouTube Q&A with Sonar AI",
-    description="Paste a YouTube video ID or full URL, enter a custom prompt, and get a transcript-based answer using Perplexity.ai's Sonar API."
-).launch()
+
+# ---- Streamlit UI ----
+st.title("🎥 YouTube Transcript Summarizer (Perplexity Sonar AI)")
+
+video_url = st.text_input("Enter a YouTube video URL:")
+prompt = st.text_area("Enter your instruction (e.g., 'Summarize this transcript:')", 
+                      "Summarize this transcript:")
+
+if st.button("Generate Summary"):
+    if not video_url:
+        st.warning("Please enter a valid YouTube video URL!")
+    else:
+        try:
+            # Extract video ID from URL
+            if "v=" in video_url:
+                video_id = video_url.split("v=")[1].split("&")[0]
+            else:
+                st.error("Invalid YouTube URL format. Use a standard YouTube link.")
+                st.stop()
+
+            with st.spinner("Fetching transcript and querying Sonar AI..."):
+                transcript = YouTubeTranscriptApi().get_transcript(video_id)
+                transcript_text = "\n".join([entry["text"] for entry in transcript])
+
+                # Show a preview of transcript
+                st.subheader("Transcript Preview")
+                st.write(transcript_text[:500] + "...")
+
+                result = query_perplexity(prompt, transcript_text)
+                st.subheader("AI Generated Summary")
+                st.markdown(result)
+
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
