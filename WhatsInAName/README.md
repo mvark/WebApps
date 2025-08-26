@@ -56,6 +56,10 @@ Visit `http://localhost:5000` in your browser.
 
 > Name: **Aria**
 > Fact: *"The name Aria has multiple origins. In Italian, it means 'air' or a melody. In Hebrew, it means 'lioness'. It has gained popularity due to its musical connotations and appearance in fantasy series."*
+>
+> <img width="1205" height="579" alt="image" src="https://github.com/user-attachments/assets/dab397b3-941d-469f-98d6-8db7163e3c0f" />
+For longer output, increase the number of tokens
+
 
 ---
 
