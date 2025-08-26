@@ -46,7 +46,7 @@ if name:
                         "content": f"Tell me 3 interesting and fun facts about the name '{name}'. Include historical significance, famous people with this name, or cultural meanings. Keep it engaging and informative."
                     }
                 ],
-                "max_tokens": 500,
+                "max_tokens": 1500,
                 "temperature": 0.7
             }
             
