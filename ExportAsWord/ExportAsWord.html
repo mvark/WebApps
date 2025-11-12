@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Download Selected Text Demo</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .content-container { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        button { 
+            padding: 10px 20px; 
+            background-color: #28a745; /* Green button */
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Select Text to Export</h1>
+    <p>Use your mouse to highlight any part of the text below, then click the button.</p>
+
+    <div class="content-container">
+        <p><strong>Article Snippet 1:</strong> The concept of client-side file generation is fundamental to modern web design. It ensures privacy since data never leaves the user's browser during the export process. This method relies on JavaScript to build the file structure.</p>
+        <p><strong>Article Snippet 2:</strong> When you execute a download from the client side, the browser uses a Blob object. This object holds the raw data (in this case, simple HTML formatted as a Word document) and allows the browser to create a temporary, downloadable link using `URL.createObjectURL()`.</p>
+        <p><strong>Article Snippet 3:</strong> Andrej Karpathy once said, "It's not the year of the agent. It's the decade of the agent." This highlights the shift from single-purpose models to complex, task-driven AI systems. **You can select this quote to download it!**</p>
+    </div>
+
+    <button onclick="downloadSelectedText()">⬇️ Download selected text as Word</button>
+
+    <script>
+    function downloadSelectedText() {
+        const selection = window.getSelection();
+        let selectedText = selection.toString().trim();
+
+        if (selectedText.length === 0) {
+            alert("Please select some text on the page first!");
+            return;
+        }
+
+        // 1. STRIP HTML TAGS (for selected content only)
+        // This is still good practice to ensure the user's selection doesn't pull unwanted tags
+        const cleanText = selectedText.replace(/<[^>]*>/g, '');
+
+        // 2. Format the content with simple HTML for the Word document
+        // Use a <pre> tag to preserve exact text formatting and line breaks
+        const documentContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='utf-8'>
+            </head>
+            <body>
+                <h1>Exported Selected Text</h1>
+                <p>Date: ${new Date().toLocaleString()}</p>
+                <hr>
+                <div style="font-size: 12pt; margin-top: 15px;">
+                    <pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${cleanText}</pre>
+                </div>
+            </body>
+            </html>
+        `;
+
+        // 3. ENCODE AND TRIGGER DOWNLOAD (The Reliable Fix)
+
+        // Encode the content to base64 or URL-encoded format
+        const dataUri = 'data:application/msword;charset=utf-8,' + encodeURIComponent(documentContent);
+
+        // Create a temporary link element
+        const a = document.createElement('a');
+        a.href = dataUri;
+        a.download = 'Selected_Text_Clean_Fixed.doc'; 
+
+        // Trigger the download
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        document.body.removeChild(a);
+    }
+    
+    // (Ensure the button calls this function)
+    // <button onclick="downloadSelectedText()">⬇️ Download selected text as Word</button>
+
+    </script>
+</body>
+</html>
