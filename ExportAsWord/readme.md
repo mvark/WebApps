@@ -26,7 +26,21 @@ Step 5. Execution - The JavaScript programmatically simulates a click on the tem
 
 a.click();
 
-Result - The browser downloads the content as a .doc file. When the user opens it, Microsoft Word (or a similar program) reads the HTML structure and renders it as a rich-text document.
+__Result__ - The browser downloads the content as a .doc file. When the user opens it, Microsoft Word (or a similar program) reads the HTML structure and renders it as a rich-text document.
+
+## Key JavaScript Features Used
+
+The features that make a modern client-side export possible were primarily introduced with HTML5 and ECMAScript 2015 (ES6), or as standalone browser APIs:
+
+Blobs (Binary Large Objects) - Essential for creating the document content in memory. A Blob represents file-like data (often binary) that is immutable. The code uses this to package the HTML/XML content into a downloadable "file."
+
+URL.createObjectURL() - Creates a temporary, unique URL reference to the Blob (the file data). This URL allows the browser to treat the in-memory data as a downloadable file source.
+
+FileSaver Pattern (A-Download) - Using a hidden anchor (<a>) tag and setting its download attribute allows the developer to programmatically trigger a download of the Blob file referred to by the temporary URL.
+
+Template Literals (Backticks ``) - Simplifies the creation of the complex XML/HTML structure required for the .doc or .docx file by allowing easy multiline strings and variable interpolation (${variable}).
+
+This server-less method of exporting to a Word document using only vanilla JavaScript and browser APIs is a product of modern web standards. A decade ago (around 2015), these features were either brand new or not widely and consistently supported across all major browsers
 
 ## 🛑 Important Note on .docx - This method generates a .doc file (an older format) by wrapping HTML. 
 
