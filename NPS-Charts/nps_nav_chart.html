@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPS NAV Chart</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        canvas {
+            max-height: 700px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .info-item {
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NPS ICICI PRUDENTIAL PENSION FUND SCHEME E - TIER II: Multi-Year Monthly NAV Patterns</h1>
+        <div class="info" id="infoBar">
+            <div class="info-item" style="background: #666; color: white;">
+                Loading 52-week data...
+            </div>
+        </div>
+        <div id="loading" class="loading">Loading data...</div>
+        <canvas id="navChart"></canvas>
+    </div>
+
+    <script>
+        // Color mapping for each year
+        const yearColors = {
+            2025: { color: '#8B0000', width: 3 },
+            2024: { color: '#FF4500', width: 2 },
+            2023: { color: '#FFD700', width: 2 },
+            2022: { color: '#32CD32', width: 2 },
+            2021: { color: '#1E90FF', width: 2 },
+            2020: { color: '#9370DB', width: 2 },
+            2019: { color: '#FF1493', width: 2 },
+            2018: { color: '#00CED1', width: 2 },
+            2017: { color: '#FF8C00', width: 2 },
+            2016: { color: '#4169E1', width: 2 },
+            2015: { color: '#DC143C', width: 2 },
+            2014: { color: '#20B2AA', width: 2 }
+        };
+
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        function formatDate(dateObj) {
+            const day = dateObj.getDate();
+            const month = monthNames[dateObj.getMonth()];
+            const year = dateObj.getFullYear();
+            return `${day} ${month} ${year}`;
+        }
+
+        // Fetch and process data
+        fetch('https://npsnav.in/api/historical/SM007004')
+            .then(response => response.json())
+            .then(apiData => {
+                document.getElementById('loading').style.display = 'none';
+
+                // Parse all data with dates
+                const allData = apiData.data.map(item => {
+                    const parts = item.date.split('-');
+                    const date = new Date(parts[2], parts[1] - 1, parts[0]);
+                    return {
+                        date: date,
+                        nav: parseFloat(item.nav),
+                        month: date.getMonth(),
+                        year: date.getFullYear()
+                    };
+                });
+
+                // Calculate 52-week high/low dynamically
+                const today = new Date();
+                const fiftyTwoWeeksAgo = new Date(today);
+                fiftyTwoWeeksAgo.setDate(today.getDate() - (52 * 7));
+
+                const last52Weeks = allData.filter(d => d.date >= fiftyTwoWeeksAgo);
+
+                let highData = last52Weeks[0];
+                let lowData = last52Weeks[0];
+
+                last52Weeks.forEach(d => {
+                    if (d.nav > highData.nav) highData = d;
+                    if (d.nav < lowData.nav) lowData = d;
+                });
+
+                // Update info bar with dynamic values
+                document.getElementById('infoBar').innerHTML = `
+                    <div class="info-item" style="background: rgba(200, 0, 0, 0.9); color: white;">
+                        52W Low: ${lowData.nav.toFixed(2)} (${formatDate(lowData.date)})
+                    </div>
+                    <div class="info-item" style="background: rgba(0, 150, 0, 0.9); color: white;">
+                        52W High: ${highData.nav.toFixed(2)} (${formatDate(highData.date)})
+                    </div>
+                `;
+
+                // Group data by year for chart
+                const yearGroups = {};
+                allData.forEach(d => {
+                    if (!yearGroups[d.year]) {
+                        yearGroups[d.year] = [];
+                    }
+                    yearGroups[d.year].push(d);
+                });
+
+                // Create datasets for each year
+                const datasets = [];
+                const yearEndValues = {};
+
+                Object.keys(yearGroups).sort().forEach(year => {
+                    const yearData = yearGroups[year];
+
+                    // Average by month
+                    const monthlyAvg = {};
+                    yearData.forEach(d => {
+                        if (!monthlyAvg[d.month]) {
+                            monthlyAvg[d.month] = [];
+                        }
+                        monthlyAvg[d.month].push(d.nav);
+                    });
+
+                    const dataPoints = [];
+                    Object.keys(monthlyAvg).forEach(month => {
+                        const avg = monthlyAvg[month].reduce((a, b) => a + b, 0) / monthlyAvg[month].length;
+                        dataPoints.push({
+                            x: parseInt(month),
+                            y: avg
+                        });
+                    });
+
+                    dataPoints.sort((a, b) => a.x - b.x);
+
+                    if (dataPoints.length > 0) {
+                        yearEndValues[year] = dataPoints[dataPoints.length - 1].y;
+                    }
+
+                    const yearConfig = yearColors[year] || { color: '#999', width: 2 };
+
+                    datasets.push({
+                        label: year,
+                        data: dataPoints,
+                        borderColor: yearConfig.color,
+                        backgroundColor: yearConfig.color,
+                        borderWidth: yearConfig.width,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    });
+                });
+
+                // Calculate month positions for high/low markers
+                const highMonth = highData.date.getMonth();
+                const lowMonth = lowData.date.getMonth();
+                const highDay = highData.date.getDate();
+                const lowDay = lowData.date.getDate();
+
+                // Approximate position within month (0-1 range becomes month + fraction)
+                const highPosition = highMonth + (highDay / 31);
+                const lowPosition = lowMonth + (lowDay / 31);
+
+                // Create chart
+                const ctx = document.getElementById('navChart').getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets: datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        layout: {
+                            padding: {
+                                right: 80
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const monthIndex = Math.floor(context[0].parsed.x);
+                                        return monthNames[monthIndex] + ' ' + context[0].dataset.label;
+                                    },
+                                    label: function(context) {
+                                        return 'NAV: ' + context.parsed.y.toFixed(4);
+                                    }
+                                }
+                            },
+                            annotation: {
+                                annotations: {
+                                    highLine: {
+                                        type: 'line',
+                                        xMin: highPosition,
+                                        xMax: highPosition,
+                                        borderColor: 'rgba(0, 150, 0, 0.6)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 4]
+                                    },
+                                    lowLine: {
+                                        type: 'line',
+                                        xMin: lowPosition,
+                                        xMax: lowPosition,
+                                        borderColor: 'rgba(200, 0, 0, 0.6)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 4]
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: 11,
+                                ticks: {
+                                    stepSize: 1,
+                                    callback: function(value) {
+                                        return monthNames[value];
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Month',
+                                    font: { size: 13, weight: 'bold' }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'NAV',
+                                    font: { size: 13, weight: 'bold' }
+                                },
+                                beginAtZero: false
+                            }
+                        }
+                    },
+                    plugins: [{
+                        id: 'smartYearLabels',
+                        afterDatasetsDraw: function(chart) {
+                            const ctx = chart.ctx;
+                            const chartArea = chart.chartArea;
+
+                            const labelPositions = [];
+                            chart.data.datasets.forEach((dataset, i) => {
+                                const meta = chart.getDatasetMeta(i);
+                                if (!meta.hidden && dataset.data.length > 0) {
+                                    const lastPoint = meta.data[meta.data.length - 1];
+                                    labelPositions.push({
+                                        year: dataset.label,
+                                        color: dataset.borderColor,
+                                        y: lastPoint.y,
+                                        originalY: lastPoint.y
+                                    });
+                                }
+                            });
+
+                            labelPositions.sort((a, b) => a.y - b.y);
+
+                            const minSpacing = 18;
+                            for (let i = 1; i < labelPositions.length; i++) {
+                                const prev = labelPositions[i - 1];
+                                const curr = labelPositions[i];
+                                if (curr.y - prev.y < minSpacing) {
+                                    curr.y = prev.y + minSpacing;
+                                }
+                            }
+
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'middle';
+
+                            labelPositions.forEach(label => {
+                                ctx.fillStyle = label.color;
+                                ctx.font = 'bold 14px Arial';
+
+                                const xPos = chartArea.right + 10;
+                                const yPos = label.y;
+
+                                if (Math.abs(label.y - label.originalY) > 2) {
+                                    ctx.strokeStyle = label.color;
+                                    ctx.lineWidth = 1;
+                                    ctx.setLineDash([2, 2]);
+                                    ctx.beginPath();
+                                    ctx.moveTo(chartArea.right + 2, label.originalY);
+                                    ctx.lineTo(xPos - 2, yPos);
+                                    ctx.stroke();
+                                    ctx.setLineDash([]);
+                                }
+
+                                ctx.fillText(label.year, xPos, yPos);
+                            });
+                        }
+                    }]
+                });
+            })
+            .catch(error => {
+                document.getElementById('loading').innerHTML = 'Error loading data: ' + error.message;
+                document.getElementById('infoBar').innerHTML = `
+                    <div class="info-item" style="background: #d00; color: white;">
+                        Error: ${error.message}
+                    </div>
+                `;
+                console.error('Error:', error);
+            });
+    </script>
+</body>
+</html>
