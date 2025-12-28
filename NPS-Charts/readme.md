@@ -2,6 +2,9 @@
 
 This project visualizes multi‑year NAV history for an Indian NPS scheme using a public JSON API and a fully client‑side Chart.js setup. It is designed as a reusable example for analyzing seasonal patterns (monthly dips and rises) across years.
 
+<img width="504" height="424" alt="image" src="https://github.com/user-attachments/assets/cb397d59-2d87-4a38-8a22-8e967fa04d63" />
+
+
 ## Features
 
 - Fetches historical NAV for scheme **SM007004** from `https://npsnav.in/api/historical/SM007004`  
