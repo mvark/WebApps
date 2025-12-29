@@ -1,6 +1,8 @@
 # NPS NAV Multi‑Year Line Chart (Chart.js)
 
-This project visualizes multi‑year NAV history for an Indian NPS scheme using a public JSON API and a fully client‑side Chart.js setup. It is designed as a reusable example for analyzing seasonal patterns (monthly dips and rises) across years.
+[National Pension System or NPS](https://indiacola.blogspot.com/2025/01/nps.html) is one of the cheapest market-linked annuity and long-term investment options in India.
+
+This project visualizes multi‑year NAV history for the NPS scheme "ICICI PRUDENTIAL PENSION FUND SCHEME E - TIER II" using a public JSON API and a fully client‑side Chart.js setup. It is designed as a reusable example for analyzing seasonal patterns (monthly dips and rises) across years for schemes from different Pension Fund Managers (PFM). 
 
 <img width="504" height="424" alt="image" src="https://github.com/user-attachments/assets/cb397d59-2d87-4a38-8a22-8e967fa04d63" />
 
