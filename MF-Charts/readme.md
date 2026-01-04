@@ -2,8 +2,10 @@
 
 This project visualizes the multi‑year NAV history of an Indian mutual fund using the free [**MFapi.in**](https://www.mfapi.in/) API by [Yuvaraj Loganathan](https://www.linkedin.com/in/yuvarajl/) and **Chart.js**. 
 It is designed to help investors study seasonal patterns and see 52‑week high/low levels for a scheme at a glance.
+![MF-multi](https://github.com/user-attachments/assets/852d8d7c-ee31-4fbe-a73a-f4c8085b2730)
 
-The sample is built for: **HDFC Large Cap Fund – IDCW Option – Regular Plan** but you can easily adapt it for any other scheme supported by MFapi.in.
+
+The sample shows charts for some MF schemes but you can easily adapt it for any other scheme supported by MFapi.in.
 
 ## Features
 
