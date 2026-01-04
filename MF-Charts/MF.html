@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mutual Fund NAV Multi-Chart - MFapi.in</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1700px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+            min-width: 400px;
+        }
+        label {
+            font-weight: bold;
+            font-size: 14px;
+            color: #555;
+        }
+        select {
+            padding: 10px 15px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+        }
+        select:hover {
+            border-color: #8B0000;
+        }
+        select:focus {
+            outline: none;
+            border-color: #8B0000;
+            box-shadow: 0 0 5px rgba(139, 0, 0, 0.2);
+        }
+        .scheme-title {
+            text-align: center;
+            color: #8B0000;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .link-btn {
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 13px;
+            transition: background 0.3s;
+        }
+        .link-btn:hover {
+            background: #004499;
+        }
+        .link-btn.zerodha {
+            background: #387ed1;
+        }
+        .link-btn.zerodha:hover {
+            background: #2563a8;
+        }
+        .info {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .info-item {
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        canvas {
+            max-height: 700px;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mutual Fund Multi-Year NAV Patterns</h1>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="schemeSelect">Select Mutual Fund Scheme:</label>
+                <select id="schemeSelect">
+                    <optgroup label="HDFC Funds - Direct">
+                        <option value="118989|HDFC_MID_CAP_NRWMOV">HDFC Mid-Cap Opportunities - Direct - Growth</option>
+                        <option value="118968|HDFC_BALA_ADV_17B9AAH">HDFC Balanced Advantage - Direct - Growth</option>  
+                    </optgroup>
+                    <optgroup label="SBI Funds - Direct">
+                        <option value="119598|SBI_LARG_CAP_SHAWZV">SBI Large Cap - Direct - Growth</option>
+                        <option value="119835|SBI_CONT_DIR_1RU9ENP">SBI Contra - Direct - Growth</option>
+                        <option value="119727|SBI_FOCU_DIR_3RV0WI">SBI Focused Equity - Direct - Growth</option>
+                        <option value="119827|SBI_NIFT_INDE_1U4UMFS">SBI Nifty Index - Direct - Growth</option>
+                        <option value="149134|SBI_BALA_ADVA_136O8P5">SBI Balanced Advantage - Direct</option>
+                    </optgroup>
+                    <optgroup label="ICICI Prudential">
+                        <option value="120586|ICIC_PRUD_LARG_AD6V0M">ICICI Pru Large Cap - Direct - Growth</option>
+                        <option value="120377|ICIC_PRU_BALA_1QBIJFI">ICICI Pru Balanced - Direct - Growth</option>
+                        <option value="120722|ICIC_PRU_FOCU_4CKRUH">ICICI Pru Focused Equity - Direct - Growth</option>
+                    </optgroup>
+                </select>
+            </div>
+        </div>
+
+        <div class="scheme-title" id="schemeTitle">Select a scheme to view chart</div>
+
+        <div class="links" id="verifyLinks" style="display:none;">
+            <a href="#" target="_blank" class="link-btn" id="googleFinanceLink">
+                🔍 Google Finance
+            </a>
+            <a href="#" target="_blank" class="link-btn zerodha" id="zerodhaLink">
+                🔍 Zerodha
+            </a>
+        </div>
+
+        <div class="info" id="infoBar">
+            <div class="info-item" style="background: #666; color: white;">
+                Select a scheme to begin
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display:none;">Loading data from MFapi.in...</div>
+        <canvas id="navChart"></canvas>
+    </div>
+
+    <script>
+        const yearColors = {
+            2025: { color: '#8B0000', width: 3 },
+            2024: { color: '#FF4500', width: 2 },
+            2023: { color: '#FFD700', width: 2 },
+            2022: { color: '#32CD32', width: 2 },
+            2021: { color: '#1E90FF', width: 2 },
+            2020: { color: '#9370DB', width: 2 },
+            2019: { color: '#FF1493', width: 2 },
+            2018: { color: '#00CED1', width: 2 },
+            2017: { color: '#FF8C00', width: 2 },
+            2016: { color: '#4169E1', width: 2 },
+            2015: { color: '#DC143C', width: 2 },
+            2014: { color: '#20B2AA', width: 2 },
+            2013: { color: '#8B4513', width: 2 },
+            2012: { color: '#2F4F4F', width: 2 },
+            2011: { color: '#FF69B4', width: 2 },
+            2010: { color: '#00FA9A', width: 2 }
+        };
+
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        let currentChart = null;
+
+        function formatDate(dateObj) {
+            const day = dateObj.getDate();
+            const month = monthNames[dateObj.getMonth()];
+            const year = dateObj.getFullYear();
+            return `${day} ${month} ${year}`;
+        }
+
+        function parseDate(dateStr) {
+            const parts = dateStr.split('-');
+            return new Date(parts[2], parts[1] - 1, parts[0]);
+        }
+
+        function loadSchemeData(schemeCode, googleFinanceCode) {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('infoBar').innerHTML = `
+                <div class="info-item" style="background: #666; color: white;">
+                    Loading data...
+                </div>
+            `;
+
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            fetch(`https://api.mfapi.in/mf/${schemeCode}`)
+                .then(response => response.json())
+                .then(apiData => {
+                    document.getElementById('loading').style.display = 'none';
+
+                    // Update scheme title
+                    document.getElementById('schemeTitle').textContent = apiData.meta.scheme_name;
+
+                    // Update links
+                    const googleLink = document.getElementById('googleFinanceLink');
+                    const zerodhaLink = document.getElementById('zerodhaLink');
+
+                    googleLink.href = `https://www.google.com/finance/quote/${googleFinanceCode}:MUTF_IN`;
+
+                    // Extract ISIN from API response
+                    const isin = apiData.meta.scheme_code; // MFapi returns various ISINs
+                    if (apiData.meta.isin_growth) {
+                        zerodhaLink.href = `https://coin.zerodha.com/mf/fund/${apiData.meta.isin_growth}`;
+                    } else if (apiData.meta.isin_div_payout_isin) {
+                        zerodhaLink.href = `https://coin.zerodha.com/mf/fund/${apiData.meta.isin_div_payout_isin}`;
+                    } else if (apiData.meta.isin_div_reinvestment) {
+                        zerodhaLink.href = `https://coin.zerodha.com/mf/fund/${apiData.meta.isin_div_reinvestment}`;
+                    }
+
+                    document.getElementById('verifyLinks').style.display = 'flex';
+
+                    // Parse all data
+                    const allData = apiData.data.map(item => {
+                        const date = parseDate(item.date);
+                        return {
+                            date: date,
+                            nav: parseFloat(item.nav),
+                            month: date.getMonth(),
+                            year: date.getFullYear()
+                        };
+                    });
+
+                    allData.sort((a, b) => a.date - b.date);
+
+                    // Calculate 52-week high/low
+                    const today = new Date();
+                    const fiftyTwoWeeksAgo = new Date(today);
+                    fiftyTwoWeeksAgo.setDate(today.getDate() - (52 * 7));
+
+                    const last52Weeks = allData.filter(d => d.date >= fiftyTwoWeeksAgo);
+
+                    let highData = last52Weeks[0];
+                    let lowData = last52Weeks[0];
+
+                    last52Weeks.forEach(d => {
+                        if (d.nav > highData.nav) highData = d;
+                        if (d.nav < lowData.nav) lowData = d;
+                    });
+
+                    // Update info bar
+                    document.getElementById('infoBar').innerHTML = `
+                        <div class="info-item" style="background: rgba(200, 0, 0, 0.9); color: white;">
+                            52W Low: ₹${lowData.nav.toFixed(2)} (${formatDate(lowData.date)})
+                        </div>
+                        <div class="info-item" style="background: rgba(0, 150, 0, 0.9); color: white;">
+                            52W High: ₹${highData.nav.toFixed(2)} (${formatDate(highData.date)})
+                        </div>
+                        <div class="info-item" style="background: rgba(0, 100, 200, 0.9); color: white;">
+                            Current NAV: ₹${apiData.data[0].nav} (${apiData.data[0].date})
+                        </div>
+                    `;
+
+                    // Group by year
+                    const yearGroups = {};
+                    allData.forEach(d => {
+                        if (!yearGroups[d.year]) {
+                            yearGroups[d.year] = [];
+                        }
+                        yearGroups[d.year].push(d);
+                    });
+
+                    // Create datasets
+                    const datasets = [];
+                    Object.keys(yearGroups).sort().forEach(year => {
+                        const yearData = yearGroups[year];
+                        const monthlyAvg = {};
+                        yearData.forEach(d => {
+                            if (!monthlyAvg[d.month]) {
+                                monthlyAvg[d.month] = [];
+                            }
+                            monthlyAvg[d.month].push(d.nav);
+                        });
+
+                        const dataPoints = [];
+                        Object.keys(monthlyAvg).forEach(month => {
+                            const avg = monthlyAvg[month].reduce((a, b) => a + b, 0) / monthlyAvg[month].length;
+                            dataPoints.push({ x: parseInt(month), y: avg });
+                        });
+
+                        dataPoints.sort((a, b) => a.x - b.x);
+                        const yearConfig = yearColors[year] || { color: '#999', width: 2 };
+
+                        datasets.push({
+                            label: year,
+                            data: dataPoints,
+                            borderColor: yearConfig.color,
+                            backgroundColor: yearConfig.color,
+                            borderWidth: yearConfig.width,
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        });
+                    });
+
+                    const highPosition = highData.date.getMonth() + (highData.date.getDate() / 31);
+                    const lowPosition = lowData.date.getMonth() + (lowData.date.getDate() / 31);
+
+                    // Create chart
+                    const ctx = document.getElementById('navChart').getContext('2d');
+                    currentChart = new Chart(ctx, {
+                        type: 'line',
+                        data: { datasets: datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            layout: { padding: { right: 80 } },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(context) {
+                                            const monthIndex = Math.floor(context[0].parsed.x);
+                                            return monthNames[monthIndex] + ' ' + context[0].dataset.label;
+                                        },
+                                        label: function(context) {
+                                            return 'NAV: ₹' + context.parsed.y.toFixed(2);
+                                        }
+                                    }
+                                },
+                                annotation: {
+                                    annotations: {
+                                        highLine: {
+                                            type: 'line',
+                                            xMin: highPosition,
+                                            xMax: highPosition,
+                                            borderColor: 'rgba(0, 150, 0, 0.6)',
+                                            borderWidth: 2,
+                                            borderDash: [6, 4]
+                                        },
+                                        lowLine: {
+                                            type: 'line',
+                                            xMin: lowPosition,
+                                            xMax: lowPosition,
+                                            borderColor: 'rgba(200, 0, 0, 0.6)',
+                                            borderWidth: 2,
+                                            borderDash: [6, 4]
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    type: 'linear',
+                                    min: 0,
+                                    max: 11,
+                                    ticks: {
+                                        stepSize: 1,
+                                        callback: function(value) {
+                                            return monthNames[value];
+                                        }
+                                    },
+                                    title: { display: true, text: 'Month', font: { size: 13, weight: 'bold' } }
+                                },
+                                y: {
+                                    title: { display: true, text: 'NAV (₹)', font: { size: 13, weight: 'bold' } },
+                                    beginAtZero: false
+                                }
+                            }
+                        },
+                        plugins: [{
+                            id: 'smartYearLabels',
+                            afterDatasetsDraw: function(chart) {
+                                const ctx = chart.ctx;
+                                const chartArea = chart.chartArea;
+                                const labelPositions = [];
+
+                                chart.data.datasets.forEach((dataset, i) => {
+                                    const meta = chart.getDatasetMeta(i);
+                                    if (!meta.hidden && dataset.data.length > 0) {
+                                        const lastPoint = meta.data[meta.data.length - 1];
+                                        labelPositions.push({
+                                            year: dataset.label,
+                                            color: dataset.borderColor,
+                                            y: lastPoint.y,
+                                            originalY: lastPoint.y
+                                        });
+                                    }
+                                });
+
+                                labelPositions.sort((a, b) => a.y - b.y);
+                                const minSpacing = 18;
+                                for (let i = 1; i < labelPositions.length; i++) {
+                                    const prev = labelPositions[i - 1];
+                                    const curr = labelPositions[i];
+                                    if (curr.y - prev.y < minSpacing) {
+                                        curr.y = prev.y + minSpacing;
+                                    }
+                                }
+
+                                ctx.textAlign = 'left';
+                                ctx.textBaseline = 'middle';
+
+                                labelPositions.forEach(label => {
+                                    ctx.fillStyle = label.color;
+                                    ctx.font = 'bold 14px Arial';
+                                    const xPos = chartArea.right + 10;
+                                    const yPos = label.y;
+
+                                    if (Math.abs(label.y - label.originalY) > 2) {
+                                        ctx.strokeStyle = label.color;
+                                        ctx.lineWidth = 1;
+                                        ctx.setLineDash([2, 2]);
+                                        ctx.beginPath();
+                                        ctx.moveTo(chartArea.right + 2, label.originalY);
+                                        ctx.lineTo(xPos - 2, yPos);
+                                        ctx.stroke();
+                                        ctx.setLineDash([]);
+                                    }
+                                    ctx.fillText(label.year, xPos, yPos);
+                                });
+                            }
+                        }]
+                    });
+                })
+                .catch(error => {
+                    document.getElementById('loading').innerHTML = 'Error: ' + error.message;
+                    document.getElementById('infoBar').innerHTML = `
+                        <div class="info-item" style="background: #d00; color: white;">
+                            Error loading data: ${error.message}
+                        </div>
+                    `;
+                    console.error('Error:', error);
+                });
+        }
+
+        document.getElementById('schemeSelect').addEventListener('change', function() {
+            const value = this.value;
+            if (value) {
+                const [schemeCode, googleFinanceCode] = value.split('|');
+                loadSchemeData(schemeCode, googleFinanceCode);
+            }
+        });
+    </script>
+</body>
+</html>
