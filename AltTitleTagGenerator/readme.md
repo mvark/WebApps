@@ -235,7 +235,7 @@ To get an API key from OpenRouter.ai, follow these steps:
 
 ## Extra Tips
 
-- **For the Molmo model specifically**:  The `allenai/molmo-2-8b: free` model is marked as free, so you might be able to use it without adding credits, but creating an account and API key is still required.
+- **For the [Molmo model](https://openrouter.ai/allenai/molmo-2-8b:free) specifically**:  The `allenai/molmo-2-8b: free` model is marked as free, so you might be able to use it without adding credits, but creating an account and API key is still required.
 
 ## Adding to Google Apps Script
 
