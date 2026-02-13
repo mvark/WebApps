@@ -1,0 +1,241 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Protein Price Calculator</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    margin: 0;
+    background: #fafafa;
+  }
+  h1 {
+    font-size: 1.5rem;
+    padding: 16px;
+    margin: 0;
+  }
+  .table-wrap {
+    overflow-x: hidden; /* Prevent horizontal scrollbar */
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    border-bottom: 1px solid #ddd;
+    padding: 12px 15px;
+    text-align: right;
+    white-space: normal; /* Allow text wrapping */
+    border-right: 1px solid #e0e0e0;
+    word-break: break-word;
+  }
+  th:last-child, td:last-child {
+    border-right: none;
+  }
+  th {
+    background: #f5f5f5;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  th.sortable {
+      cursor: pointer;
+      user-select: none;
+  }
+  th.sortable:hover {
+      background: #e0e0e0;
+  }
+  th .sort-indicator {
+      display: inline-block;
+      margin-left: 5px;
+  }
+  th:first-child, td:first-child {
+    text-align: left;
+  }
+  input[type="number"] {
+    width: 70px;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: right;
+  }
+  .error-message {
+      color: #d93025;
+      text-align: center;
+      padding: 20px;
+  }
+  .calculated {
+      font-weight: bold;
+      color: #333;
+  }
+  /* Responsive styles for smaller screens */
+  @media (max-width: 600px) {
+    th, td {
+        padding: 8px 5px;
+        font-size: 0.9em;
+    }
+    input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    h1 {
+        font-size: 1.2rem;
+        padding: 10px;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<h1>Protein Price Calculator</h1>
+
+<div class="table-wrap">
+<table id="proteinTable">
+  <thead>
+    <tr>
+      <th>Product Name</th>
+      <th>Pack (g)</th>
+      <th>Protein /100g</th>
+      <th class="sortable" data-sort-key="totalProtein">Total Protein (g) <span class="sort-indicator"></span></th>
+      <th>Price (₹)</th>
+      <th class="sortable" data-sort-key="pricePerGramProtein">₹ / g Protein <span class="sort-indicator">↕️</span></th>
+      <th class="sortable" data-sort-key="unitSalePrice">Unit Sale Price (₹/g) <span class="sort-indicator"></span></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+</div>
+
+<script>
+const GITHUB_CSV_URL = 'https://gist.githubusercontent.com/mvark/4f0278b04a69efd344aa9893f47f6b18/raw/ProteinPrice.csv';
+const tableBody = document.querySelector("#proteinTable tbody");
+let productsData = [];
+const sortState = {
+    key: 'pricePerGramProtein',
+    isAscending: true
+};
+
+function displayError(message) {
+    tableBody.innerHTML = `<tr><td colspan="7" class="error-message">${message}</td></tr>`;
+}
+
+function updateCalculations(product) {
+    const unitSalePrice = product.pack > 0 && product.price > 0 ? (product.price / product.pack) : 0;
+    const totalProtein = (product.pack * product.protein100) / 100;
+    const pricePerGramProtein = totalProtein > 0 && product.price > 0 ? (product.price / totalProtein) : 0;
+
+    product.unitSalePrice = unitSalePrice;
+    product.totalProtein = totalProtein;
+    product.pricePerGramProtein = pricePerGramProtein;
+}
+
+function updateRowInDOM(product) {
+    document.getElementById(`total-protein-${product.id}`).textContent = product.totalProtein.toFixed(1);
+    document.getElementById(`price-per-gram-${product.id}`).textContent = product.pricePerGramProtein > 0 ? `₹${product.pricePerGramProtein.toFixed(2)}` : 'N/A';
+    document.getElementById(`usp-${product.id}`).textContent = product.unitSalePrice > 0 ? `₹${product.unitSalePrice.toFixed(2)}` : 'N/A';
+}
+
+function renderTable() {
+    tableBody.innerHTML = "";
+    productsData.forEach(product => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${product.name}</td>
+            <td><input type="number" value="${product.pack}" data-id="${product.id}" data-key="pack"></td>
+            <td><input type="number" value="${product.protein100}" data-id="${product.id}" data-key="protein100"></td>
+            <td class="calculated" id="total-protein-${product.id}">${product.totalProtein.toFixed(1)}</td>
+            <td><input type="number" value="${product.price}" data-id="${product.id}" data-key="price"></td>
+            <td class="calculated" id="price-per-gram-${product.id}">${product.pricePerGramProtein > 0 ? `₹${product.pricePerGramProtein.toFixed(2)}` : 'N/A'}</td>
+            <td class="calculated" id="usp-${product.id}">${product.unitSalePrice > 0 ? `₹${product.unitSalePrice.toFixed(2)}` : 'N/A'}</td>
+        `;
+        tableBody.appendChild(tr);
+    });
+}
+
+function sortTableAndRender() {
+    productsData.sort((a, b) => {
+        const valA = a[sortState.key] || 0;
+        const valB = b[sortState.key] || 0;
+        return sortState.isAscending ? valA - valB : valB - valA;
+    });
+
+    document.querySelectorAll('th.sortable').forEach(th => {
+        const key = th.dataset.sortKey;
+        const indicator = th.querySelector('.sort-indicator');
+        if (key === sortState.key) {
+            indicator.textContent = sortState.isAscending ? '🔼' : '🔽';
+        } else {
+            indicator.textContent = '↕️';
+        }
+    });
+
+    renderTable();
+}
+
+
+async function fetchCsvData() {
+  try {
+    const response = await fetch(GITHUB_CSV_URL);
+    if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
+    const text = await response.text();
+    if (!text || text.trim() === '') throw new Error('CSV file is empty.');
+
+    productsData = text.split('\n').slice(1).map((rowStr, index) => {
+      if (rowStr.trim() === '') return null;
+      const cols = rowStr.split(',');
+      return {
+          id: index,
+          name: cols[0] || '',
+          pack: Number(cols[1] || 0),
+          protein100: Number(cols[4] || 0),
+          price: Number(cols[6] || 0)
+      };
+    }).filter(p => p && p.name);
+
+    productsData.forEach(updateCalculations);
+    sortTableAndRender();
+
+  } catch (error) {
+    console.error('Error fetching or parsing CSV data:', error);
+    displayError(`Failed to load data. Details: ${error.message}`);
+  }
+}
+
+tableBody.addEventListener('input', (event) => {
+    const target = event.target;
+    if (target.tagName === 'INPUT' && target.type === 'number') {
+        const productId = Number(target.dataset.id);
+        const key = target.dataset.key;
+        const product = productsData.find(p => p.id === productId);
+        if (product && key) {
+            product[key] = Number(target.value);
+            updateCalculations(product);
+            updateRowInDOM(product);
+        }
+    }
+});
+
+document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const key = th.dataset.sortKey;
+        if (sortState.key === key) {
+            sortState.isAscending = !sortState.isAscending;
+        } else {
+            sortState.key = key;
+            sortState.isAscending = true;
+        }
+        sortTableAndRender();
+    });
+});
+
+fetchCsvData();
+
+</script>
+</body>
+</html>
