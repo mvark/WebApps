@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Nutrition Extractor</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; line-height: 1.6; background: #f4f7f6; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .loading { display: none; color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Nutrition Table Extractor</h2>
+    <p>Enter an image URL of a nutrition label (per 100g):</p>
+    
+    <input type="text" id="apiKey" placeholder="Paste your Gemini API Key here">
+    <input type="text" id="imageUrl" placeholder="https://example.com/nutrition-label.jpg">
+    <button id="extractBtn">Extract Nutrition Data</button>
+    
+    <div id="loader" class="loading">Gemini is analyzing the image...</div>
+    <div id="resultArea"></div>
+</div>
+
+<script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    const btn = document.getElementById('extractBtn');
+    const resultArea = document.getElementById('resultArea');
+    const loader = document.getElementById('loader');
+
+    btn.addEventListener('click', async () => {
+        const key = document.getElementById('apiKey').value;
+        const url = document.getElementById('imageUrl').value;
+
+        if (!key || !url) return alert("Please provide both an API Key and an Image URL.");
+
+        btn.disabled = true;
+        loader.style.display = "block";
+        resultArea.innerHTML = "";
+
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+            // Fetch image and convert to Base64
+            const imageResp = await fetch(url);
+            const blob = await imageResp.blob();
+            const base64Data = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+
+            const prompt = `
+                Analyze this nutrition label. Extract the values specifically for "per 100g" or "per 100ml".
+                Return ONLY a JSON object with these keys: 
+                "energy-kcal", "proteins", "carbohydrates", "sugars", "fiber", "fat", "saturated-fat", "sodium".
+                If a value is missing, use null. Use only numbers (e.g. 450, not "450kcal").
+            `;
+
+            const result = await model.generateContent([
+                prompt,
+                { inlineData: { data: base64Data, mimeType: blob.type } }
+            ]);
+
+            // Clean up JSON response (Gemini sometimes adds ```json blocks)
+            const text = result.response.text().replace(/```json|```/g, "").trim();
+            const data = JSON.parse(text);
+
+            displayTable(data);
+        } catch (err) {
+            resultArea.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+        } finally {
+            btn.disabled = false;
+            loader.style.display = "none";
+        }
+    });
+
+    function displayTable(data) {
+        let html = `<table><tr><th>Nutrient (per 100g)</th><th>Value</th></tr>`;
+        for (const [key, value] of Object.entries(data)) {
+            html += `<tr>
+                <td style="text-transform: capitalize;">${key.replace('-', ' ')}</td>
+                <td>${value !== null ? value : 'N/A'}</td>
+            </tr>`;
+        }
+        html += `</table>`;
+        resultArea.innerHTML = html;
+    }
+</script>
+
+</body>
+</html>
