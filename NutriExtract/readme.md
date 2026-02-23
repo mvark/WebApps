@@ -1,6 +1,9 @@
 # Nutri-Extract: Browser-Side AI Nutrition Extractor
 
-**Nutri-Extract** is a zero-install, single-file web application that leverages Google’s **Gemini 2.5 Flash** to perform Optical Character Recognition (OCR) on nutrition labels. It transforms a simple image URL into a structured data table without requiring a dedicated backend server.
+**Nutri-Extract** is a zero-install, single-file web application that leverages Google’s **Gemini 2.5 Flash** to perform Optical Character Recognition (OCR) on nutrition labels. It transforms a simple image URL of a nutrition table into a structured data table without requiring a dedicated backend server.
+
+<img width="218" height="286" alt="image" src="https://github.com/user-attachments/assets/32ad36e1-6f2a-4b26-9ece-fb09c1f166ce" />
+
 
 ![NutritionTableExtractor](https://github.com/user-attachments/assets/ad9d3625-7cef-48e8-be18-9f578bc5a91d)
 
@@ -36,7 +39,7 @@ The system uses a strict prompt to force Gemini to return **only** a JSON object
 
 ---
 
-## Code Walkthrough 
+## 📜 Code Walkthrough 
 
 ### 1. The "Zero-Install" Library Import
 
@@ -117,24 +120,30 @@ const data = JSON.parse(text);
 * The Regex `/```json|```/g` looks for those backticks and removes them globally.
 * `JSON.parse()` takes the cleaned string and turns it into a live object that code can interact with.
 
-
-
-### 6. Mapping the Object to the UI
+### 6. Mapping the Object to the UI with Dynamic Table Generation
 
 ```javascript
+function displayTable(data) {
 for (const [key, value] of Object.entries(data)) {
     html += `<tr>
         <td style="text-transform: capitalize;">${key.replace('-', ' ')}</td>
         <td>${value || 'N/A'}</td>
     </tr>`;
+    }
+   // ...
 }
-
 ```
+
+What it does: This is a simple loop. It takes the "Keys" (like energy-kcal) and "Values" (like 450) from the JSON and creates HTML rows on the fly. It also replaces hyphens with spaces to make it look cleaner for the user.
 
 * **The Statement:** This iterates through every piece of data Gemini found.
 * **The Detail:** * `Object.entries(data)` turns your JSON into a list of pairs.
 * `${key.replace('-', ' ')}` takes a technical key like `saturated-fat` and makes it human-readable as `saturated fat`.
 * `${value || 'N/A'}` is a "fallback." If the AI returned `null` for a missing value, it displays "N/A" instead of an empty box.
+
+### Why this app is "better" than a basic OCR tool
+
+The answer lies in Step 4 and 5. Standard OCR just gives you a pile of words. These statements prove your app actually understands the relationship between the words "Protein" and the number "5g" and turns it into usable data.
 
 ### ⚠️ Note 
 
