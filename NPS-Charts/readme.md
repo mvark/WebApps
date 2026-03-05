@@ -9,7 +9,7 @@ This project visualizes multi‑year NAV history for the NPS scheme "ICICI PRUDE
 
 ## Features
 
-- Fetches historical NAV for scheme **SM007004** from `https://npsnav.in/api/historical/SM007004`  
+- Fetches historical NAV for scheme **SM007004** from `https://npsnav.in/api/historical/SM007004`. NPSNAV.in derives data from the [NPS website](https://npstrust.org.in/weekly-snapshot-nps-schemes)
 - Converts daily data into **monthly averages per year**  
 - Plots each year as a **separate colored line** on a shared Jan–Dec x‑axis  
 - Current year (2025) drawn as a **thicker dark‑red line**  
