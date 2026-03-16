@@ -13,7 +13,7 @@ Web Apps that I've created, enhanced or remixed through my collaboration with Gi
 11. [NutriScan](https://github.com/mvark/WebApps/tree/main/NutriScan) uses the Open Food Facts API to detect whether a scanned food item is Ultra Processed or not.
 12. [People Tracker](https://github.com/mvark/WebApps/tree/main/PeopleTracker) is a simple bookmarklet that allows you to quickly save the URL, title, and your personal notes about any webpage (like a social media profile) directly into a Google Sheet. Your data stays in your own sheet and you can keep editing it whenever you like
 13. [PhonaTick](https://github.com/mvark/WebApps/tree/main/PhonaTick) is a front-end for a list of words with tricky pronunciations fetched via a JSON API through Datasette
-14. ProteinPriceCalculator — Calculator for comparing protein content by price.
+14. [Protein Price Calculator](https://github.com/mvark/WebApps/tree/main/ProteinPriceCalculator) — Calculator for comparing protein content by price.
 15. [GitHub User Roaster](https://github.com/mvark/WebApps/blob/main/Roaster/README.md)  is a Streamlit app that fetches a GitHub user’s metadata via the GitHub API, analyzes recent public commits—highlighting coding patterns, quirky commit messages, and even emojis—and then uses Perplexity AI’s Sonar model to deliver a sharp, humorous “roast” of the user.
 16. [Things Near Me](https://github.com/mvark/WebApps/tree/main/ThingsNearMe) uses the GeoNames API to find landmarks / interesting places around you while you're travelling.
 17. [Whats In A Name](https://github.com/mvark/WebApps/tree/main/WhatsInAName) is a simple Flask app that uses the Sonar API from Perplexity.ai to fetch interesting, cultural, and historical facts about names.
