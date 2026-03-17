@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price & Expiry Scan (Fixed)</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; background: #f4f7f6; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #ccc; }
+        #resultArea { margin-top: 20px; padding: 15px; border: 1px solid #eee; border-radius: 4px; line-height: 1.8; }
+        .expired { color: #d93025; font-weight: bold; border: 1px solid #d93025; padding: 2px 5px; }
+        .fresh { color: #188038; font-weight: bold; }
+        .date-info { font-size: 0.9em; color: #5f6368; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Price & Expiry Extractor</h2>
+    <div id="todayDisplay" class="date-info"></div>
+
+    <input type="text" id="apiKey" placeholder="Paste your Gemini API Key here">
+    <input type="text" id="imageUrl" placeholder="Paste Image URL here">
+    <button id="extractBtn">Extract & Validate Data</button>
+    
+    <div id="loader" style="display:none; color: #666; font-style: italic;">Gemini is analyzing the package...</div>
+    <div id="resultArea">Results will appear here...</div>
+</div>
+
+<script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    const btn = document.getElementById('extractBtn');
+    const resultArea = document.getElementById('resultArea');
+    const loader = document.getElementById('loader');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    document.getElementById('todayDisplay').innerText = "Today's Date: " + today.toDateString();
+
+    btn.addEventListener('click', async () => {
+        const key = document.getElementById('apiKey').value;
+        const url = document.getElementById('imageUrl').value;
+
+        if (!key || !url) return alert("Please provide both an API Key and an Image URL.");
+
+        btn.disabled = true;
+        loader.style.display = "block";
+        resultArea.innerHTML = "";
+
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            // Using 2.5 Flash as per your working sample
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+            // Fetch image and convert to Base64
+            const imageResp = await fetch(url);
+            const blob = await imageResp.blob();
+            const base64Data = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+
+            const prompt = `
+                Analyze this food package. Extract:
+                1. Manufacturing Date (mfg_date)
+                2. Expiry Date (expiry_date)
+                3. Maximum Retail Price (mrp)
+                4. Unit Sale Price (unit_price)
+                
+                Return ONLY a JSON object with these keys. 
+                Format all dates as YYYY-MM-DD. If values are missing, use null.
+            `;
+
+            const result = await model.generateContent([
+                prompt,
+                { inlineData: { data: base64Data, mimeType: blob.type } }
+            ]);
+
+            const text = result.response.text().replace(/```json|```/g, "").trim();
+            let data = JSON.parse(text);
+
+            // --- VALIDATION & SWAP LOGIC ---
+            let dateMfg = data.mfg_date ? new Date(data.mfg_date) : null;
+            let dateExp = data.expiry_date ? new Date(data.expiry_date) : null;
+
+            if (dateMfg && dateExp && dateMfg > dateExp) {
+                // Swap the values if they are chronologically impossible
+                let temp = data.mfg_date;
+                data.mfg_date = data.expiry_date;
+                data.expiry_date = temp;
+                dateExp = new Date(data.expiry_date); // update dateExp for countdown
+            }
+
+            // --- COUNTDOWN CALCULATION ---
+            let countdownHtml = "";
+            if (dateExp) {
+                const diffTime = dateExp - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) {
+                    countdownHtml = `<span class="expired">EXPIRED ${Math.abs(diffDays)} days ago</span>`;
+                } else {
+                    countdownHtml = `<span class="fresh">${diffDays} days until expiry</span>`;
+                }
+            }
+
+            // --- DISPLAY RESULTS ---
+            resultArea.innerHTML = `
+                <div><strong>Mfg Date:</strong> ${data.mfg_date || 'N/A'}</div>
+                <div><strong>Expiry Date:</strong> ${data.expiry_date || 'N/A'} ${countdownHtml}</div>
+                <div><strong>MRP:</strong> ${data.mrp || 'N/A'}</div>
+                <div><strong>Unit Price:</strong> ${data.unit_price || 'N/A'}</div>
+            `;
+
+        } catch (err) {
+            resultArea.innerHTML = `<p style="color:red">Error: ${err.message}<br>
+            <small>Note: If using a direct URL, the site must allow CORS or use a proxy.</small></p>`;
+        } finally {
+            btn.disabled = false;
+            loader.style.display = "none";
+        }
+    });
+</script>
+
+</body>
+</html>
