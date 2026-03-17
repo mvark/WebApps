@@ -22,6 +22,17 @@ A lightweight, single-file web application that uses **Google Gemini AI** to ext
 4.  **Provide Image URL:** Paste a direct URL to an image of a food package (e.g., from an e-commerce site or Imgur).
 5.  **Extract:** Click the **"Extract & Validate Data"** button.
 
+## Code Explanation: How it Works
+
+The application is a single-file "Serverless" web app. Here are the three main technical pillars:
+
+* Multimodal Processing: Instead of traditional OCR (which often fails on curved or glossy packaging), it uses Gemini 2.5 Flash. The AI "looks" at the image and understands the context—distinguishing between a Manufacturing Date and an Expiry Date even if they aren't labeled clearly.
+
+* Logic Guardrails (Date Swapping): AI can sometimes misalign labels and dates. The script includes a logical check: if (dateMfg > dateExp). If the AI claims it was made after it expired, the code automatically swaps them back to ensure data integrity.
+
+* Real-time Validation: The script calculates the difference between today and the expiry_date. It uses CSS classes (.expired and .fresh) to give the user immediate visual feedback on whether the product is safe to use.
+
+
 ## ⚠️ Important Note on CORS
 
 This application uses the `fetch()` API to grab images from URLs. Many websites block direct access to their images (CORS policy). 
