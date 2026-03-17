@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Highlight → PDF (Client-side)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+    .content { max-width: 800px; margin: 0 auto; }
+    .highlight { background-color: #ffff99; padding: 2px 4px; border-radius: 3px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 10px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="content">
+    <h1>Highlight any text below and click the button!</h1>
+    
+    <p>This is a sample paragraph. Go ahead and <span class="highlight">highlight this part</span> with your mouse.</p>
+    
+    <p>Chandrasekhara Venkata Raman won the Nobel Prize in 1930 for the Raman Effect. 
+       You can highlight this entire sentence or just <span class="highlight">the words you like</span>.</p>
+    
+    <p>Try selecting multiple parts across different paragraphs too!</p>
+
+    <button onclick="generatePDF()">📄 Convert Highlighted Text to PDF</button>
+  </div>
+
+  <script>
+    function generatePDF() {
+      const selection = window.getSelection();
+      
+      if (selection.toString().trim() === "") {
+        alert("🤔 Please highlight some text first!");
+        return;
+      }
+
+      // Create a temporary div with only the highlighted text
+      const tempDiv = document.createElement('div');
+      tempDiv.style.padding = "30px";
+      tempDiv.style.fontFamily = "Arial, sans-serif";
+      tempDiv.style.lineHeight = "1.8";
+      tempDiv.style.fontSize = "16px";
+      tempDiv.innerHTML = `<h2>Highlighted Content</h2><p>${selection.toString().trim()}</p>`;
+
+      // Options for html2pdf
+      const options = {
+        margin: [15, 15, 15, 15],
+        filename: 'highlighted-content.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Generate PDF
+      html2pdf().set(options).from(tempDiv).save()
+        .then(() => {
+          console.log("✅ PDF generated successfully on client side!");
+        })
+        .catch(err => {
+          console.error("❌ Error:", err);
+          alert("Something went wrong while generating PDF.");
+        });
+    }
+  </script>
+
+</body>
+</html>
