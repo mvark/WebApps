@@ -1,6 +1,10 @@
-# Hugging Face Vision Inference API Demo
+# CloudSpotting -  A Hugging Face Vision Inference API Demo
 
 A tiny, dependency-free HTML application that demonstrates how to use the **Hugging Face Inference API** to analyze an image with a large multimodal AI model—directly from the browser.
+
+Meteorologists classify clouds in a hierarchy, much like biology classifies living organisms. There are several APIs and AI models that can identify cloud types from photographs. This code sample allows user to upload a photograph of clouds as input and then identifies the cloud from among the 10 cloud genera, explains why, estimates confidence and describe likely weather implications.
+<img width="882" height="596" alt="cloud-id" src="https://github.com/user-attachments/assets/971b2845-fa55-43aa-8e9e-e22f1084ebe4" />
+
 
 This project uploads **nothing** to your own server. The selected image is converted to Base64 in the browser and sent directly to a Hugging Face Vision Language Model (VLM), which identifies the cloud and returns structured JSON.
 
