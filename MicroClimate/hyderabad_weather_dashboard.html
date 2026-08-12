@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hyderabad Micro Climate Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; padding:16px; }
+  h2 { color:#f5a623; margin-bottom:4px; }
+  .sub { color:#888; margin-top:0; margin-bottom:16px; font-size:13px; }
+
+  /* Horizontal locality checkbox bar across the top, wraps to multiple lines if needed */
+  .places-bar {
+    display:flex; flex-wrap:wrap; gap:8px 20px;
+    background:#1a1a1a; border:1px solid #333; padding:10px 14px; border-radius:6px;
+    margin-bottom:20px;
+  }
+  .places-bar h3 { width:100%; margin:0 0 6px; font-size:14px; color:#ccc; }
+  .places-bar label { font-size:13px; cursor:pointer; white-space:nowrap; }
+  .places-bar input { margin-right:5px; }
+
+  /* Map (left) and table (right) sit in the same row; table can grow/scroll
+     as more columns are checked, map stays a fixed, shorter width. Both
+     columns share the same height so they stay visually proportional. */
+  .row-layout { display:flex; gap:20px; align-items:flex-start; }
+  .map-col { flex:0 0 380px; height:320px; }
+  #map { height:100%; width:100%; border:1px solid #333; border-radius:6px; }
+  .table-col { flex:1 1 auto; min-width:0; height:320px; overflow:auto; }
+
+  .apikey-row { margin-bottom:14px; }
+  .apikey-row input { width:340px; padding:5px; background:#1a1a1a; border:1px solid #444; color:#eee; }
+  .apikey-row label { font-size:13px; color:#ccc; margin-right:6px; }
+  table { border-collapse:collapse; background:#1a1a1a; min-width:300px; }
+  th, td { border:1px solid #333; padding:11px 12px; text-align:center; font-size:13px; white-space:nowrap; }
+  th.param-col, td.param-col { text-align:left; background:#222; color:#ccc; font-weight:bold; position:sticky; left:0; }
+  th { background:#222; color:#f5a623; }
+  .status-ok { color:#4caf50; font-weight:bold; }
+  .status-err { color:#e05555; font-weight:bold; }
+  .status-loading { color:#888; }
+  .refresh-btn {
+    background:#f5a623; color:#111; border:none; padding:6px 14px; border-radius:4px;
+    cursor:pointer; font-size:13px; margin-bottom:14px;
+  }
+  .note { font-size:11px; color:#777; margin-top:16px; }
+
+  .legend { display:flex; align-items:center; gap:18px; margin-top:8px; font-size:12px; color:#ccc; }
+  .legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; border:1px solid #fff; }
+  .legend .rain { background:#2196f3; }
+  .legend .norain { background:#e05555; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background:#1a1a1a; color:#eee; }
+  .leaflet-popup-content { font-size:13px; }
+</style>
+</head>
+<body>
+
+<h2>Hyderabad Micro Climate Dashboard</h2>
+<p class="sub">Data source: WeatherUnion API. <a href="https://www.weatherunion.com/dashboard/" class="status-err" target="_blank">Get your API key</a>. Check a locality to add it as a column and a dot on the map. Click a dot on the map for a quick temp/humidity/rain summary.</p>
+
+<div class="apikey-row">
+  <label for="apikey">X-Zomato-Api-Key:</label>
+  <input type="text" id="apikey" placeholder="paste your key here">
+  <button class="refresh-btn" onclick="refreshAll()">Refresh</button>
+</div>
+
+<div class="places-bar">
+  <h3>Localities</h3>
+  <div id="placeList" style="display:contents;"></div>
+</div>
+
+<div class="row-layout">
+  <div class="map-col">
+    <div id="map"></div>
+  </div>
+
+  <div class="table-col">
+    <table id="dataTable">
+      <thead><tr id="headerRow"><th class="param-col">Locality</th></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="legend">
+  <span><span class="dot rain"></span>Rain intensity &gt; 0 mm/hr</span>
+  <span><span class="dot norain"></span>No rain / no data</span>
+</div>
+
+<p class="note">All content on this dashboard reflects live data pulled from the WeatherUnion API at request time. Map tiles &copy; <a href="https://www.openstreetmap.org/copyright" style="color:#888;">OpenStreetMap</a> contributors.</p>
+
+<script>
+// --- Map setup (Leaflet + OpenStreetMap tiles - both open source, no API key needed) ---
+const map = L.map('map').setView([17.4400, 78.4483], 11); // centred roughly on Hyderabad
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18
+}).addTo(map);
+
+// One Leaflet circleMarker per checked locality, keyed by place name.
+const markers = {};
+
+// Shows "-" for anything missing, matching the table's own placeholder rules.
+function dashIfMissing(v) {
+  return (v === undefined || v === null || v === "-") ? "-" : v;
+}
+
+// A locality counts as "raining" when rain_intensity is greater than 0.
+// Missing/error data is treated as not-raining, since there's nothing to
+// confirm rain from.
+function isRaining(record) {
+  if (!record) return false;
+  const ri = parseFloat(record.rain_intensity);
+  return !isNaN(ri) && ri > 0;
+}
+
+function popupHtml(name) {
+  const r = dataCache[name];
+  return `<strong>${name}</strong><br>
+    Temp: ${r ? dashIfMissing(r.temperature) : "-"} &deg;C<br>
+    Humidity: ${r ? dashIfMissing(r.humidity) : "-"} %<br>
+    Rain Accum: ${r ? dashIfMissing(r.rain_accumulation) : "-"} mm`;
+}
+
+// Adds a dot for every newly-checked place and removes dots for unchecked
+// ones - mirrors the same add/remove-only logic used for table columns, so
+// unchecking a box never triggers a fetch here either.
+function syncMarkers(places) {
+  Object.keys(markers).forEach(name => {
+    if (!places.includes(name)) {
+      map.removeLayer(markers[name]);
+      delete markers[name];
+    }
+  });
+  places.forEach(name => {
+    if (!markers[name]) {
+      const coords = LOCALITIES[name];
+      const marker = L.circleMarker([coords.lat, coords.lon], {
+        radius: 8, weight: 1, color: '#fff',
+        fillColor: isRaining(dataCache[name]) ? '#2196f3' : '#e05555',
+        fillOpacity: 0.9
+      }).addTo(map).bindPopup(popupHtml(name));
+      markers[name] = marker;
+    }
+  });
+}
+
+// Called after a fetch resolves (success or error) to recolour the dot and
+// refresh its popup content with the latest values.
+function updateMarker(name) {
+  const marker = markers[name];
+  if (!marker) return; // place may have been unchecked while the fetch was in flight
+  marker.setStyle({ fillColor: isRaining(dataCache[name]) ? '#2196f3' : '#e05555' });
+  marker.setPopupContent(popupHtml(name));
+}
+
+// locality name -> {lat, lon} - the weather endpoint takes coordinates, not a place name
+const LOCALITIES = {
+  "Manikonda": { lat: 17.40593, lon: 78.38838 },
+  "Shamshabad": { lat: 17.257432, lon: 78.38792 },
+  "Miyapur": { lat: 17.500034, lon: 78.34267 },
+  "Hayath Nagar": { lat: 17.32662, lon: 78.609288 },
+  "Sangareddy": { lat: 17.598038, lon: 78.091346 },
+  "JNTU": { lat: 17.485166, lon: 78.389775 },
+  "Serilingampally": { lat: 17.485245, lon: 78.313916 },
+  "Nizampet": { lat: 17.509398, lon: 78.390364 },
+  "Q City": { lat: 17.421788, lon: 78.318868 },
+  "Madhapur": { lat: 17.441185, lon: 78.398416 },
+  "Narayanguda": { lat: 17.39212, lon: 78.494443 },
+  "ECIL": { lat: 17.460327, lon: 78.567924 },
+  "Toli Chowki": { lat: 17.398121, lon: 78.421238 },
+  "Kondapur": { lat: 17.472485, lon: 78.367854 },
+  "Charminar": { lat: 17.375037, lon: 78.454499 },
+  "Sivarampalli": { lat: 17.345995, lon: 78.439283 },
+  "Tarnaka": { lat: 17.431829, lon: 78.55094 },
+  "Moosapet": { lat: 17.453292, lon: 78.421126 },
+  "Patancheru": { lat: 17.542613, lon: 78.276529 },
+  "Vanasthali Puram": { lat: 17.318241, lon: 78.544989 },
+  "Ameerpet": { lat: 17.434737, lon: 78.446618 },
+  "Uppal": { lat: 17.403149, lon: 78.554106 },
+  "Malakpet": { lat: 17.371621, lon: 78.502672 },
+  "Hafiz Baba Nagar": { lat: 17.338717, lon: 78.49759 },
+  "Mokila": { lat: 17.436228, lon: 78.190072 },
+  "Nagole": { lat: 17.359969, lon: 78.565724 },
+  "Attapur": { lat: 17.380875, lon: 78.415717 },
+  "Peerzadiguda": { lat: 17.411644, lon: 78.57822 },
+  "Begumpet": { lat: 17.442659, lon: 78.482009 },
+  "Surooram": { lat: 17.559752, lon: 78.437467 },
+  "Banjara Hills": { lat: 17.419238, lon: 78.438474 },
+  "Alwal": { lat: 17.508852, lon: 78.507402 },
+  "Sainikpuri": { lat: 17.489079, lon: 78.55891 },
+  "Saroor Nagar": { lat: 17.348264, lon: 78.530476 },
+  "Karkhana": { lat: 17.467142, lon: 78.496696 },
+  "Kompally": { lat: 17.533309, lon: 78.489965 },
+  "Himayatnagar": { lat: 17.402602, lon: 78.487229 },
+  "Medchal Road": { lat: 17.637191, lon: 78.480392 },
+  "Kukatpally": { lat: 17.495894, lon: 78.416259 },
+  "Amberpet": { lat: 17.407658, lon: 78.521703 },
+  "Jeedimetla": { lat: 17.495621, lon: 78.450281 },
+  "Gachibowli": { lat: 17.452114, lon: 78.351486 },
+  "LB Nagar": { lat: 17.345727, lon: 78.557062 },
+  "Dilsukhnagar": { lat: 17.370431, lon: 78.536184 },
+  "Masab Tank": { lat: 17.398217, lon: 78.462258 }
+};
+
+const DEFAULT_CHECKED = ["Miyapur", "Kondapur", "Serilingampally", "Gachibowli", "Madhapur"];
+
+const PARAMS = [
+  { key: "temperature", label: "Temperature °C" },
+  { key: "humidity", label: "Humidity %H" },
+  { key: "wind_speed", label: "Wind Speed km/h" },
+  { key: "wind_direction", label: "Wind Direction °" },
+  { key: "rain_intensity", label: "Rain Intensity mm/hr" },
+  { key: "rain_accumulation", label: "Rain Accumulation mm" },
+  { key: "status", label: "Status" }
+];
+
+// Cache of fetched weather values per place, so unchecking/rechecking doesn't
+// re-hit the API unnecessarily. Cleared only by explicit Refresh.
+const dataCache = {};
+
+// Build checkbox list
+const placeListEl = document.getElementById("placeList");
+Object.keys(LOCALITIES).sort().forEach(name => {
+  const label = document.createElement("label");
+  const checked = DEFAULT_CHECKED.includes(name);
+  label.innerHTML = `<input type="checkbox" value="${name}" ${checked ? "checked" : ""} onchange="onToggle(this)"> ${name}`;
+  placeListEl.appendChild(label);
+});
+
+function getCheckedPlaces() {
+  return Array.from(placeListEl.querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
+}
+
+function cssId(name) {
+  return name.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function renderTable(places) {
+  const headerRow = document.getElementById("headerRow");
+  const tbody = document.getElementById("tableBody");
+
+  headerRow.innerHTML = `<th class="param-col">Locality</th>` +
+    places.map(p => `<th>${p}</th>`).join("");
+
+  tbody.innerHTML = PARAMS.map(param => {
+    return `<tr id="row-${param.key}">
+      <td class="param-col">${param.label}</td>
+      ${places.map(p => {
+        const cached = dataCache[p];
+        const val = cached && cached[param.key] != null ? cached[param.key] : "…";
+        const cls = cached ? (param.key === "status" ? (cached.status === "OK" ? "status-ok" : "status-err") : "") : "status-loading";
+        return `<td id="cell-${param.key}-${cssId(p)}" class="${cls}">${val}</td>`;
+      }).join("")}
+    </tr>`;
+  }).join("");
+
+  syncMarkers(places); // keep the map's dots in sync with the checked list
+}
+
+async function fetchLocality(name) {
+  const apiKey = document.getElementById("apikey").value.trim();
+  const coords = LOCALITIES[name];
+  if (!apiKey) {
+    dataCache[name] = { status: "No API key" };
+    setCell(name, "status", "No API key", "status-err");
+    updateMarker(name);
+    return;
+  }
+  try {
+    const url = `https://www.weatherunion.com/gw/weather/external/v0/get_weather_data?latitude=${coords.lat}&longitude=${coords.lon}`;
+    const resp = await fetch(url, {
+      headers: { "X-Zomato-Api-Key": apiKey }
+    });
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status);
+    }
+    const data = await resp.json();
+    const w = data.locality_weather_data || {};
+    const record = {
+      temperature: w.temperature != null ? w.temperature : "-",
+      humidity: w.humidity != null ? w.humidity : "-",
+      wind_speed: w.wind_speed != null ? w.wind_speed : "-",
+      wind_direction: w.wind_direction != null ? w.wind_direction : "-",
+      rain_intensity: w.rain_intensity != null ? w.rain_intensity : "-",
+      rain_accumulation: w.rain_accumulation != null ? w.rain_accumulation : "-",
+      status: "OK"
+    };
+    dataCache[name] = record;
+    Object.keys(record).forEach(key => setCell(name, key, record[key], key === "status" ? "status-ok" : ""));
+    updateMarker(name);
+  } catch (err) {
+    const record = {
+      temperature: "-", humidity: "-", wind_speed: "-", wind_direction: "-",
+      rain_intensity: "-", rain_accumulation: "-", status: "Error: " + err.message
+    };
+    dataCache[name] = record;
+    PARAMS.forEach(p => setCell(name, p.key, record[p.key], p.key === "status" ? "status-err" : ""));
+    updateMarker(name);
+  }
+}
+
+function setCell(name, key, value, cls) {
+  const cell = document.getElementById(`cell-${key}-${cssId(name)}`);
+  if (!cell) return; // column may have been unchecked/removed since fetch started
+  cell.textContent = value;
+  cell.className = "";
+  if (cls) cell.classList.add(cls);
+}
+
+// Called when a checkbox is toggled. Adding a place fetches its data (once,
+// cached thereafter); removing a place only re-renders the table - no API call.
+function onToggle(checkbox) {
+  const places = getCheckedPlaces();
+  renderTable(places);
+  if (checkbox && checkbox.checked && !dataCache[checkbox.value]) {
+    fetchLocality(checkbox.value);
+  }
+}
+
+// Explicit refresh re-fetches every currently checked place, bypassing the cache.
+function refreshAll() {
+  const places = getCheckedPlaces();
+  places.forEach(p => delete dataCache[p]);
+  renderTable(places);
+  places.forEach(p => fetchLocality(p));
+}
+
+// init
+onToggle(null);
+DEFAULT_CHECKED.forEach(p => fetchLocality(p));
+</script>
+
+</body>
+</html>
