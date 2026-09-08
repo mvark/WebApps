@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>India Geographic Features</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+
+<style>
+  /* ---- Minimal styling, kept simple on purpose. ---- */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  header { padding: 10px 16px; border-bottom: 1px solid #ddd; }
+  header h1 { margin: 0; font-size: 1.1rem; }
+  header p { margin: 4px 0 0 0; font-size: 0.8rem; color: #777; }
+
+  .layout { display: flex; height: calc(100vh - 56px); }
+  #map-pane { flex: 1.2; min-width: 0; }
+  #map { height: 100%; width: 100%; }
+  #table-pane { flex: 1; min-width: 0; overflow-y: auto; border-left: 1px solid #ddd; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { position: sticky; top: 0; background: #fafafa; border-bottom: 1px solid #ddd; }
+
+  tr.feature-row { cursor: pointer; }
+  tr.feature-row:hover { background: #f5f8ff; }
+  tr.feature-row.active { background: #e8f0fe; }
+  tr.no-location { color: #999; cursor: default; }
+  tr.no-location:hover { background: none; }
+
+  /* Small numbered badge used in the table — round for point-like
+     features (a waterfall, a cave), square for broad/regional ones
+     (a desert, a delta). Same colors/number as the matching map icon. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    background: #c0392b;
+    border: 1px solid #7b241c;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    margin-right: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+  .badge.square { border-radius: 3px; }
+  .number-cell { display: flex; align-items: center; }
+
+  /* Same badge, sized up slightly for the map. */
+  .map-badge {
+    width: 22px; height: 22px;
+    background: #c0392b;
+    border: 1.5px solid #7b241c;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 2px rgba(0,0,0,0.4);
+    border-radius: 50%;
+  }
+  .map-badge.square { border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; height: auto; }
+    #map-pane { height: 45vh; }
+    #table-pane { border-left: none; border-top: 1px solid #ddd; max-height: none; }
+
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    tr.feature-row, tr.no-location { border-bottom: 1px solid #eee; padding: 8px 10px; }
+    td { border-bottom: none; padding: 2px 0; }
+    td[data-label]:before {
+      content: attr(data-label) ": ";
+      font-weight: 600;
+      color: #555;
+    }
+    td.number-cell:before { display: inline; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>India — Geographic Features Reference</h1>
+  <p>Click a row to zoom the map to that place. Squares = broad/regional features, circles = specific points. Grey rows have no Indian example.</p>
+</header>
+
+<div class="layout">
+  <div id="map-pane"><div id="map"></div></div>
+  <div id="table-pane">
+    <table>
+      <thead>
+        <tr><th>No.</th><th>Term</th><th>Description</th><th>Example</th></tr>
+      </thead>
+      <tbody id="table-body"><!-- filled by JS from FEATURES below --></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DATA — single source of truth for both the table and the
+   map markers.
+
+   Fields you'll likely want to edit:
+   - zoom: how close the map flies in when this row is clicked.
+     Lower = zoomed out (5-6 suits an ocean, a whole desert, a
+     plateau); higher = zoomed in (12-13 suits a single
+     waterfall, a temple pond). Edit any row's number freely —
+     nothing else depends on it.
+   - shape: "square" marks broad/regional features (a desert, a
+     delta, a whole valley); leave it out entirely for
+     point-like landmarks (a waterfall, a cave) and it defaults
+     to a circle. Just add/remove the shape line per row to
+     change how it's drawn.
+
+   Entries with no lat/lng ("Fjord", "Taiga") aren't found in
+   India, so they're listed but not clickable/plotted.
+   ========================================================= */
+const FEATURES = [
+  { term: "Archipelago", desc: "A group of islands located close together.", example: "Andaman & Nicobar Islands", lat: 11.7401, lng: 92.6586, zoom: 8, shape: "square" },
+  { term: "Atoll", desc: "A ring-shaped coral island surrounding a lagoon.", example: "Lakshadweep Islands", lat: 10.5667, lng: 72.6417, zoom: 9 },
+  { term: "Badlands", desc: "Deeply eroded barren terrain with gullies.", example: "Chambal Badlands", lat: 26.5000, lng: 78.7000, zoom: 9, shape: "square" },
+  { term: "Basin", desc: "A low-lying area where rivers collect water.", example: "Brahmaputra Basin, Assam", lat: 26.2006, lng: 92.9376, zoom: 6, shape: "square" },
+  { term: "Bay", desc: "A broad inlet of the sea partly enclosed by land.", example: "Bay of Bengal", lat: 15.0000, lng: 88.0000, zoom: 6, shape: "square" },
+  { term: "Beach", desc: "A sandy or pebbly shore along a sea, lake, or river.", example: "Marina Beach, Chennai", lat: 13.0500, lng: 80.2824, zoom: 12 },
+  { term: "Butte", desc: "An isolated hill with steep sides and a flat top.", example: "Badami, Karnataka", lat: 15.9149, lng: 75.6836, zoom: 11 },
+  { term: "Canyon", desc: "A deep valley with steep rocky sides carved by a river.", example: "Gandikota Canyon", lat: 14.8265, lng: 78.2810, zoom: 11 },
+  { term: "Cape", desc: "A narrow point of land extending into the sea.", example: "Kanyakumari", lat: 8.0883, lng: 77.5385, zoom: 11 },
+  { term: "Causeway", desc: "A raised road across water or marshland.", example: "Pamban Causeway", lat: 9.2769, lng: 79.2136, zoom: 12 },
+  { term: "Cave", desc: "A natural underground chamber in rock.", example: "Ajanta Caves", lat: 20.5519, lng: 75.7033, zoom: 12 },
+  { term: "Channel", desc: "A wider waterway connecting larger water bodies.", example: "Pamban Channel", lat: 9.2800, lng: 79.2000, zoom: 11 },
+  { term: "Cliffs", desc: "Steep rock faces.", example: "Varkala Cliffs", lat: 8.7379, lng: 76.7163, zoom: 12 },
+  { term: "Confluence", desc: "Meeting point of two or more rivers.", example: "Prayagraj", lat: 25.4358, lng: 81.8463, zoom: 12 },
+  { term: "Coral Reef", desc: "Underwater ecosystem built by corals.", example: "Gulf of Mannar", lat: 9.1500, lng: 79.1500, zoom: 9 },
+  { term: "Crater Lake", desc: "Lake occupying a crater.", example: "Lonar Lake", lat: 19.9767, lng: 76.5049, zoom: 12 },
+  { term: "Creek", desc: "A narrow inlet or small stream.", example: "Thane Creek", lat: 19.2000, lng: 72.9700, zoom: 11 },
+  { term: "Delta", desc: "Land formed by river sediment at its mouth.", example: "Sundarbans", lat: 21.9497, lng: 88.9468, zoom: 8, shape: "square" },
+  { term: "Desert", desc: "A very dry region.", example: "Thar Desert", lat: 26.9157, lng: 70.9083, zoom: 7, shape: "square" },
+  { term: "Dunes", desc: "Hills of sand formed by wind.", example: "Sam Sand Dunes", lat: 26.7625, lng: 70.5069, zoom: 11 },
+  { term: "Escarpment", desc: "A long steep slope separating landforms.", example: "Western Ghats Escarpment", lat: 11.0000, lng: 76.5000, zoom: 7, shape: "square" },
+  { term: "Estuary", desc: "Where a river meets the sea.", example: "Narmada Estuary", lat: 21.6667, lng: 72.6167, zoom: 10 },
+  { term: "Fjord", desc: "Long narrow sea inlet carved by glaciers.", example: "Not found in India", lat: null, lng: null },
+  { term: "Floodplain", desc: "Flat land beside a river that floods.", example: "Ganga Floodplain", lat: 25.3176, lng: 82.9739, zoom: 8, shape: "square" },
+  { term: "Forest", desc: "Large area covered with trees.", example: "Gir Forest, Gujarat", lat: 21.1300, lng: 70.8022, zoom: 9, shape: "square" },
+  { term: "Glacier", desc: "Large slow-moving mass of ice.", example: "Gangotri Glacier", lat: 30.9930, lng: 79.0810, zoom: 10 },
+  { term: "Gorge", desc: "Narrow valley with steep sides.", example: "Siang Gorge", lat: 28.6300, lng: 94.8300, zoom: 9 },
+  { term: "Gulf", desc: "Large part of the sea enclosed by land.", example: "Gulf of Kutch", lat: 22.4707, lng: 69.6293, zoom: 7, shape: "square" },
+  { term: "Headwaters", desc: "Source of a river.", example: "Gangotri Glacier", lat: 30.9930, lng: 79.0810, zoom: 10 },
+  { term: "Hills", desc: "Elevated land lower than mountains.", example: "Nilgiri Hills", lat: 11.4064, lng: 76.6932, zoom: 9 },
+  { term: "Hot Spring", desc: "Natural spring with heated water.", example: "Manikaran, Himachal Pradesh", lat: 32.0296, lng: 77.3419, zoom: 12 },
+  { term: "Island", desc: "Land surrounded by water.", example: "Majuli", lat: 26.9520, lng: 94.1697, zoom: 10 },
+  { term: "Isthmus", desc: "Narrow strip of land connecting larger land masses.", example: "Adam's Bridge (Rama Setu)", lat: 9.1500, lng: 79.4500, zoom: 9 },
+  { term: "Karst", desc: "Limestone landscape with caves and sinkholes.", example: "Mawsmai, Meghalaya", lat: 25.2586, lng: 91.7385, zoom: 12, shape: "square" },
+  { term: "Lagoon", desc: "Shallow water separated from sea.", example: "Chilika Lake", lat: 19.7000, lng: 85.3200, zoom: 9, shape: "square" },
+  { term: "Lake", desc: "Large inland body of water.", example: "Sambhar Lake, Rajasthan", lat: 26.9167, lng: 75.0833, zoom: 10 },
+  { term: "Mangrove", desc: "Salt-tolerant coastal forest.", example: "Sundarbans", lat: 21.9497, lng: 88.9468, zoom: 8, shape: "square" },
+  { term: "Marsh", desc: "Wetland with grasses and reeds.", example: "East Kolkata Wetlands", lat: 22.5000, lng: 88.4500, zoom: 10, shape: "square" },
+  { term: "Meander", desc: "A winding bend in a river.", example: "Chambal River", lat: 26.5000, lng: 79.0000, zoom: 10 },
+  { term: "Mesa", desc: "Large flat-topped hill.", example: "Pachmarhi", lat: 22.4675, lng: 78.4336, zoom: 11 },
+  { term: "Mountain", desc: "Very high natural elevation.", example: "Kanchenjunga", lat: 27.7025, lng: 88.1475, zoom: 9 },
+  { term: "Mudflats", desc: "Flat coastal land exposed at low tide.", example: "Gulf of Kutch", lat: 22.4707, lng: 69.6293, zoom: 8, shape: "square" },
+  { term: "Oasis", desc: "Fertile spot in a desert.", example: "Osian, Rajasthan", lat: 26.7159, lng: 72.9134, zoom: 12 },
+  { term: "Ocean", desc: "Largest body of salt water.", example: "Indian Ocean", lat: 5.0000, lng: 75.0000, zoom: 5, shape: "square" },
+  { term: "Peninsula", desc: "Land surrounded by water on three sides.", example: "Deccan Peninsula", lat: 16.5000, lng: 77.5000, zoom: 6, shape: "square" },
+  { term: "Piedmont", desc: "Gentle slope at the base of mountains.", example: "Bhabar region", lat: 29.3000, lng: 79.4000, zoom: 8, shape: "square" },
+  { term: "Plain", desc: "Broad flat land.", example: "Indo-Gangetic Plain", lat: 27.0000, lng: 80.0000, zoom: 6, shape: "square" },
+  { term: "Plateau", desc: "Elevated flat land.", example: "Deccan Plateau", lat: 17.0000, lng: 77.0000, zoom: 6, shape: "square" },
+  { term: "Pond", desc: "Small still body of freshwater.", example: "Temple ponds, Pushkar", lat: 26.4899, lng: 74.5511, zoom: 13 },
+  { term: "Prairie", desc: "Vast open grassland.", example: "Banni Grasslands", lat: 23.6000, lng: 69.6000, zoom: 9, shape: "square" },
+  { term: "Rainforest", desc: "Dense forest with heavy rainfall.", example: "Western Ghats (Periyar)", lat: 9.4667, lng: 77.1667, zoom: 9, shape: "square" },
+  { term: "Ravine", desc: "Narrow deep valley formed by erosion.", example: "Chambal Ravines", lat: 26.5500, lng: 78.7500, zoom: 10 },
+  { term: "Reservoir", desc: "Artificial lake for storing water.", example: "Nagarjuna Sagar Reservoir", lat: 16.5730, lng: 79.3130, zoom: 10 },
+  { term: "River", desc: "Natural flowing watercourse.", example: "Ganga (at Haridwar)", lat: 29.9457, lng: 78.1642, zoom: 9 },
+  { term: "Salt Marsh", desc: "Coastal marsh flooded by seawater.", example: "Great Rann of Kutch", lat: 23.8859, lng: 69.8593, zoom: 9, shape: "square" },
+  { term: "Salt Pan", desc: "Flat area used to produce salt.", example: "Little Rann of Kutch", lat: 23.3000, lng: 71.1667, zoom: 9, shape: "square" },
+  { term: "Sand Spit", desc: "Narrow strip of sand projecting into water.", example: "Point Calimere", lat: 10.2833, lng: 79.8500, zoom: 11 },
+  { term: "Sandbar", desc: "Ridge of sand deposited by water.", example: "Dhanushkodi", lat: 9.1425, lng: 79.4083, zoom: 12 },
+  { term: "Savannah", desc: "Tropical grassland with scattered trees.", example: "Velavadar", lat: 21.8167, lng: 72.1167, zoom: 10, shape: "square" },
+  { term: "Sea", desc: "Large saltwater body smaller than an ocean.", example: "Arabian Sea", lat: 15.0000, lng: 68.0000, zoom: 5, shape: "square" },
+  { term: "Strait", desc: "Narrow water passage.", example: "Palk Strait", lat: 9.5000, lng: 79.5000, zoom: 8 },
+  { term: "Swamp", desc: "Wetland dominated by trees.", example: "Bhitarkanika, Odisha", lat: 20.7000, lng: 86.9000, zoom: 9, shape: "square" },
+  { term: "Taiga", desc: "Cold coniferous forest.", example: "Not found in India", lat: null, lng: null },
+  { term: "Tundra", desc: "Cold treeless region.", example: "Spiti Valley, Himachal Pradesh", lat: 32.2460, lng: 78.0092, zoom: 9, shape: "square" },
+  { term: "Valley", desc: "Low land between hills or mountains.", example: "Kullu Valley, Himachal Pradesh", lat: 31.9578, lng: 77.1095, zoom: 9, shape: "square" },
+  { term: "Volcano", desc: "Opening where lava erupts.", example: "Barren Island", lat: 12.2783, lng: 93.8580, zoom: 11 },
+  { term: "Waterfall", desc: "Water dropping over a cliff.", example: "Jog Falls", lat: 14.2296, lng: 74.8134, zoom: 12 }
+];
+
+/* =========================================================
+   BUILD THE TABLE
+   ========================================================= */
+const tbody = document.getElementById('table-body');
+const markers = {}; // index -> Leaflet marker, for linking rows to the map
+
+FEATURES.forEach((f, i) => {
+  const hasLocation = f.lat !== null && f.lng !== null;
+  const number = i + 1;
+  const isSquare = f.shape === 'square';
+  const tr = document.createElement('tr');
+  tr.className = hasLocation ? 'feature-row' : 'no-location';
+  tr.id = 'row-' + i;
+
+  const badge = hasLocation
+    ? `<span class="badge${isSquare ? ' square' : ''}">${number}</span>`
+    : number;
+
+  tr.innerHTML = `
+    <td data-label="No." class="number-cell">${badge}</td>
+    <td data-label="Term">${f.term}</td>
+    <td data-label="Description">${f.desc}</td>
+    <td data-label="Example">${f.example}</td>
+  `;
+
+  if (hasLocation) {
+    tr.addEventListener('click', () => goToFeature(i));
+  }
+  tbody.appendChild(tr);
+});
+
+/* =========================================================
+   BUILD THE MAP — starts zoomed in on the first row
+   (Archipelago) rather than fitting the whole country.
+   ========================================================= */
+const first = FEATURES[0];
+const map = L.map('map').setView([first.lat, first.lng], first.zoom);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// Numbered markers — square for broad/regional features, circle for
+// specific points. Same number and colors as the matching table row.
+FEATURES.forEach((f, i) => {
+  if (f.lat === null || f.lng === null) return;
+  const number = i + 1;
+  const isSquare = f.shape === 'square';
+  const icon = L.divIcon({
+    className: '', // avoid Leaflet's default marker box/shadow styling
+    html: `<div class="map-badge${isSquare ? ' square' : ''}">${number}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -11]
+  });
+  const marker = L.marker([f.lat, f.lng], { icon }).addTo(map);
+  marker.bindPopup(`<strong>${f.example}</strong><br><span style="color:#666">${f.term}</span>`);
+  markers[i] = marker;
+});
+
+// (No country boundary layer — markers sit directly on the base map tiles.)
+
+/* =========================================================
+   LINKING TABLE ROWS TO THE MAP, and the initial state
+   ========================================================= */
+function goToFeature(index) {
+  const f = FEATURES[index];
+  const marker = markers[index];
+
+  map.flyTo([f.lat, f.lng], f.zoom);
+  marker.openPopup();
+
+  document.querySelectorAll('tr.active').forEach(r => r.classList.remove('active'));
+  document.getElementById('row-' + index).classList.add('active');
+}
+
+// Reflect the starting view (Archipelago) as the selected row too.
+markers[0].openPopup();
+document.getElementById('row-0').classList.add('active');
+</script>
+</body>
+</html>
