@@ -32,13 +32,10 @@ Example column and guess the real place before clicking the row to check.
 
 ## What it looks like
 
-A two-pane layout: the reference table on one side, an interactive
-[Leaflet](https://leafletjs.com/) map on the other. On a phone or narrow
-window, it stacks into a scrollable map-on-top, list-below layout instead.
+The two-pane layout is best viewed on a desktop browser: there is a reference table on one side, an interactive
+[Leaflet](https://leafletjs.com/) map on the other.
+<img width="1342" height="604" alt="geo" src="https://github.com/user-attachments/assets/1107787b-55a0-494c-b7cf-f10cf48f6fea" />
 
-| Desktop | Mobile |
-|---|---|
-| Table and map side by side | Map on top, card-style list below |
 
 ## How it works (and the interesting parts)
 
@@ -105,13 +102,6 @@ they're rendered by the same code path, not kept in sync by hand.
   td[data-label]:before { content: attr(data-label) ": "; font-weight: 600; }
 }
 ```
-
-On narrow screens, the table doesn't scroll sideways or get replaced with a
-different mobile-only component — it's the *same* markup, just redrawn.
-Each `<td>` already carries a `data-label="Term"` attribute; on mobile, CSS
-turns that attribute into visible label text via `content: attr(data-label)`,
-and stacks every cell into a card-like row. No JavaScript branching for
-mobile vs. desktop, no duplicate templates — just one CSS rule.
 
 ### Clicking flies the map; it doesn't just jump
 
