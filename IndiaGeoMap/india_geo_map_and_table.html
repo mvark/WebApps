@@ -70,7 +70,7 @@
 
   @media (max-width: 768px) {
     .layout { flex-direction: column; height: auto; }
-    #map-pane { height: 45vh; }
+    #map-pane { flex: none; height: 45vh; }
     #table-pane { border-left: none; border-top: 1px solid #ddd; max-height: none; }
 
     table, tbody, tr, td { display: block; width: 100%; }
@@ -236,6 +236,12 @@ const map = L.map('map').setView([first.lat, first.lng], first.zoom);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
+
+// Leaflet measures the map container once on init and won't notice if it
+// resizes afterward (e.g. rotating a phone, or resizing a devtools panel
+// across the mobile breakpoint without a page reload). This nudges it to
+// re-measure whenever the window size changes.
+window.addEventListener('resize', () => map.invalidateSize());
 
 // Numbered markers — square for broad/regional features, circle for
 // specific points. Same number and colors as the matching table row.
