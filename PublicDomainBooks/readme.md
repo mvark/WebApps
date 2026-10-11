@@ -2,7 +2,7 @@
 
 A tiny web page that searches the **Google Books** collection for **public-domain books** and lists them with links to download (PDF / EPUB) or read online.
 
-There are for instance scores of [out-of-copyright books](https://mvark.blogspot.com/2014/05/try-this-web-app-to-discover-old.html) mostly by Britishers on Indian languages. These books are still relevant and especially useful for those whose medium of education has been in English. 
+There are for instance scores of [out-of-copyright books mostly by Britishers on Indian languages](https://mvark.blogspot.com/2014/05/try-this-web-app-to-discover-old.html). These books are still relevant and especially useful for those whose medium of education has been in English. 
 
 **No jQuery. No libraries. No build step. No external dependencies.**
 Just one HTML file with the JavaScript inside it.
