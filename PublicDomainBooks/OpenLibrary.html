@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open Library</title>
+</head>
+
+<body>
+<div class="main-container">
+    <div class="main wrapper clearfix">
+
+        <article>
+            <header>
+                <h4>Search for Full Text Books from Open Library</h4>
+                <p>
+                    <select id="search_filter" aria-label="Search filter">
+                        <option value="title" selected>Title</option>
+                        <option value="author">Author</option>
+                        <option value="subject">Subject</option>
+                    </select>
+                    <input type="text" id="search_input" aria-label="Search input" placeholder="Enter search term">
+                </p>
+            </header>
+
+            <section>
+                <div id="fetching" hidden>Fetching results...</div>
+                <div id="content" aria-live="polite"></div>
+                <div id="pagination"></div>
+            </section>
+        </article>
+
+        <aside>
+            <h3>tips</h3>
+            <ul style="text-align: justify">
+                <li>Use the dropdown to search by Title, Author, or Subject</li>
+                <li><strong>Public access</strong> books are listed first, in bold. They can be read online for free</li>
+                <li>Books listed after them can be borrowed or have limited access. Borrowing usually needs a free Archive.org account</li>
+                <li>Archive.org links open the digitized copy of the book</li>
+                <li>Enclose the search keywords in quotation marks for an exact phrase search</li>
+            </ul>
+            <p><strong>Search Examples:</strong></p>
+            <ul>
+                <li><strong>Title:</strong> "Pride and Prejudice", "Moby Dick", "Alice in Wonderland"</li>
+                <li><strong>Author:</strong> "Jane Austen", "Charles Dickens", "Mark Twain"</li>
+                <li><strong>Subject:</strong> fiction, science, history, poetry, philosophy</li>
+            </ul>
+            <p><strong>About Open Library:</strong></p>
+            <p>Open Library is a project of the Internet Archive that provides access to millions of books.
+            This search lists books with full text available through Archive.org.</p>
+        </aside>
+
+    </div>
+</div>
+
+<script>
+(() => {
+    'use strict';
+
+    // ---------- Settings ----------
+    const API_URL = 'https://openlibrary.org/search.json';
+    const PAGE_SIZE = 40;
+    const MAX_RETRIES = 3;                       // retries on 429 / 503
+    const FIELDS = 'key,title,author_name,first_publish_year,publisher,subject,ebook_access,ia';
+
+    // Two result groups. Public-access books are always listed before the rest.
+    const GROUPS = {
+        public: { query: 'ebook_access:public',
+                  heading: 'Public access: free to read online' },
+        other:  { query: 'has_fulltext:true AND NOT ebook_access:public',
+                  heading: 'Also available: borrowable or limited access (may need a free Archive.org account)' }
+    };
+
+    const ACCESS_LABELS = {
+        public: 'Public Access',
+        borrowable: 'Borrowable',
+        printdisabled: 'Print-disabled Access'
+    };
+
+    // ---------- State ----------
+    const $ = id => document.getElementById(id);
+    const els = {
+        input: $('search_input'),
+        filter: $('search_filter'),
+        fetching: $('fetching'),
+        content: $('content'),
+        pagination: $('pagination')
+    };
+    const cache = new Map();   // request key -> Promise of API response (also de-duplicates in-flight calls)
+    let searchId = 0;          // lets us ignore answers that belong to an older search
+    let current = null;        // the active search: text, filter, counts, page
+
+    // ---------- Helpers ----------
+    const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ESCAPES[ch]);
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    function setLoading(on, text = 'Fetching results...') {
+        els.fetching.textContent = text;
+        els.fetching.hidden = !on;
+    }
+
+    function showMessage(text) {
+        els.content.textContent = text;
+        els.pagination.innerHTML = '';
+    }
+
+    // "pride and prejudice" -> title:(pride and prejudice); "\"moby dick\"" -> title:"moby dick"
+    function fieldClause(field, raw) {
+        const text = raw.trim();
+        const isPhrase = text.length > 1 && text.startsWith('"') && text.endsWith('"');
+        const clean = text.replace(/["():[\]{}^~*?\\!]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!clean) return '';
+        return isPhrase ? `${field}:"${clean}"` : `${field}:(${clean})`;
+    }
+
+    function buildUrl(search, group, page, limit, fields) {
+        const q = `${fieldClause(search.filter, search.text)} AND ${GROUPS[group].query}`;
+        return `${API_URL}?${new URLSearchParams({ q, limit, page, fields })}`;
+    }
+
+    // fetch() with retry and exponential backoff for "too many requests" style errors
+    async function fetchJson(url) {
+        let delay = 1000;
+        for (let attempt = 0; ; attempt++) {
+            const res = await fetch(url);
+            if (res.ok) return res.json();
+
+            const retryable = res.status === 429 || res.status === 503;
+            if (!retryable || attempt >= MAX_RETRIES) {
+                throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+            }
+            const retryAfter = Number(res.headers.get('Retry-After'));
+            const wait = retryAfter > 0 ? retryAfter * 1000 : delay;
+            setLoading(true, `Server is busy, retrying in ${Math.ceil(wait / 1000)}s...`);
+            await sleep(wait);
+            delay *= 2;
+        }
+    }
+
+    // Cached request. Storing the Promise means two identical requests share one network call.
+    function cachedFetch(key, url) {
+        if (!cache.has(key)) {
+            cache.set(key, fetchJson(url).catch(err => { cache.delete(key); throw err; }));
+        }
+        return cache.get(key);
+    }
+
+    const fetchGroupPage = (search, group, page) =>
+        cachedFetch(`${group}|${search.filter}|${search.text}|${page}`,
+                    buildUrl(search, group, page, PAGE_SIZE, FIELDS));
+
+    // Only the total count is needed, so ask for 1 row and 1 field
+    const fetchGroupCount = (search, group) =>
+        cachedFetch(`count|${group}|${search.filter}|${search.text}`,
+                    buildUrl(search, group, 1, 1, 'key'));
+
+    // ---------- Search flow ----------
+    async function search() {
+        const text = els.input.value.trim();
+        if (!text) return;
+
+        const id = ++searchId;
+        const s = { text, filter: els.filter.value, page: 1 };
+        current = s;
+        showMessage('');
+        setLoading(true);
+
+        try {
+            // Run both requests at the same time:
+            // page 1 of public-access books, and the number of "other" books.
+            const [firstPublic, otherCount] = await Promise.all([
+                fetchGroupPage(s, 'public', 1),
+                fetchGroupCount(s, 'other')
+            ]);
+            if (id !== searchId) return;                       // a newer search has started
+
+            s.publicCount = firstPublic.num_found || 0;
+            s.otherCount = otherCount.num_found || 0;
+            s.publicPages = Math.ceil(s.publicCount / PAGE_SIZE);
+            s.totalPages = s.publicPages + Math.ceil(s.otherCount / PAGE_SIZE);
+
+            if (s.totalPages === 0) {
+                showMessage('No books found');
+                return;
+            }
+            await showPage(s, 1, id);
+        } catch (err) {
+            if (id === searchId) showError(err);
+        } finally {
+            if (id === searchId) setLoading(false);
+        }
+    }
+
+    // Pages 1..publicPages come from the public group; the pages after that from the other group.
+    async function showPage(s, page, id) {
+        const inPublic = page <= s.publicPages;
+        const group = inPublic ? 'public' : 'other';
+        const groupPage = inPublic ? page : page - s.publicPages;
+
+        const data = await fetchGroupPage(s, group, groupPage);
+        if (id !== searchId) return;
+
+        s.page = page;
+        const startNumber = inPublic
+            ? (groupPage - 1) * PAGE_SIZE + 1
+            : s.publicCount + (groupPage - 1) * PAGE_SIZE + 1;
+        render(s, data.docs || [], group, startNumber);
+    }
+
+    async function changePage(page) {
+        const s = current;
+        if (!s || page < 1 || page > s.totalPages) return;
+        const id = searchId;
+        setLoading(true);
+        try {
+            await showPage(s, page, id);
+            els.content.scrollIntoView({ block: 'start' });
+        } catch (err) {
+            if (id === searchId) showError(err);
+        } finally {
+            if (id === searchId) setLoading(false);
+        }
+    }
+
+    function showError(err) {
+        console.error(err);
+        showMessage(err.status === 429
+            ? 'Open Library has temporarily limited requests (HTTP 429). Please wait a minute and try again.'
+            : `Error fetching results (${err.message}). Please try again.`);
+    }
+
+    // ---------- Rendering ----------
+    function render(s, docs, group, startNumber) {
+        const items = docs.map(bookItem).filter(Boolean).join('');
+        if (!items) {
+            showMessage('No books with full text access found on this page');
+        } else {
+            els.content.innerHTML =
+                `<h5>${esc(GROUPS[group].heading)}</h5><ol start="${startNumber}">${items}</ol>`;
+        }
+        renderPagination(s);
+    }
+
+    function bookItem(doc) {
+        if (!doc.key) return '';
+        const isPublic = doc.ebook_access === 'public';
+        const iaId = doc.ia && doc.ia[0];
+
+        const title = `<span title="Open Library ID: ${esc(doc.key)}">${esc(doc.title || 'Unknown Title')}</span>`;
+        const authors = doc.author_name && doc.author_name.length
+            ? `: ${esc(doc.author_name.slice(0, 3).join(', '))}; ` : '';
+        const publisher = doc.publisher && doc.publisher[0]
+            ? `<i>${esc(doc.publisher[0])}</i> ` : '';
+        const year = doc.first_publish_year ? `(${esc(doc.first_publish_year)}) ` : '';
+        const subjects = doc.subject && doc.subject.length
+            ? `<small>[${esc(doc.subject.slice(0, 2).join(', '))}]</small> ` : '';
+
+        const links = [`<a href="https://openlibrary.org${esc(doc.key)}" target="_blank" rel="noopener">Open Library</a>`];
+        if (iaId) {
+            links.push(`<a href="https://archive.org/details/${esc(encodeURIComponent(iaId))}" target="_blank" rel="noopener">Archive.org</a>`);
+        }
+        const label = ACCESS_LABELS[doc.ebook_access] || 'Full Text';
+
+        return `<li>${isPublic ? `<strong>${title}</strong>` : title}${authors}${publisher}${year}${subjects}` +
+               `${links.join(' ')} <small>(${label})</small></li>`;
+    }
+
+    function renderPagination(s) {
+        const prev = s.page > 1 ? `<button data-page="${s.page - 1}">Previous</button> ` : '';
+        const next = s.page < s.totalPages ? ` <button data-page="${s.page + 1}">Next</button>` : '';
+        const total = s.publicCount + s.otherCount;
+        els.pagination.innerHTML =
+            `${prev}Page ${s.page} of ${s.totalPages} ` +
+            `(${s.publicCount} public access + ${s.otherCount} other = ${total} total ${esc(s.filter)} matches)${next}`;
+    }
+
+    // ---------- Events ----------
+    els.input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); search(); }
+    });
+    els.filter.addEventListener('change', () => { if (els.input.value.trim()) search(); });
+    els.pagination.addEventListener('click', e => {          // one listener handles every button
+        const button = e.target.closest('button[data-page]');
+        if (button) changePage(Number(button.dataset.page));
+    });
+
+    els.input.focus();
+})();
+</script>
+</body>
+</html>
