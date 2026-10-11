@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <title>Google Books API Search in Plain JavaScript</title>
+ </head>
+ <body>
+   <div class="main-container">
+            <div class="main wrapper clearfix">
+
+                <article>
+                    <header>
+                        <h4>Search for Books in the Public Domain from the Google Books collection</h4>
+						<p>Type a book name or topic. Titles of books in the public domain which are available for free download in PDF, EPUB formats, will be shown in bold font. The rest are either samples or only available for viewing on the Web | <a href="http://mvark.blogspot.in/2013/03/search-for-free-ebooks-from-google.html" target="_blank">Notes</a></p>
+						                    
+                        <p><input type="text" id='search_input' aria-label="Search input" placeholder="Enter search term" /></p> 	
+                    </header>
+
+                    <section>
+                            <div id="fetching">Fetching results...</div>
+
+                            <div id="content"></div>
+                    </section>
+                </article>
+            </div> <!-- #main -->
+        </div> <!-- #main-container -->
+<script>
+	// Google Books free-ebook search (public-domain, downloadable PDF/EPUB)
+// Uses fetch() instead of JSONP so HTTP errors such as 429 can be detected and handled.
+
+var API_KEY = "";          // Paste your Google Books API key here 
+var MAX_RESULTS = 40;      // 40 is the maximum the API allows
+var MAX_RETRIES = 3;       // retries on 429 / 503
+
+var currentQuery = "";
+var currentPage = 0;
+var isLoading = false;
+var cache = {};            // "query|startIndex" -> API response, avoids repeat calls
+
+function buildUrl(query, startIndex) {
+    var url = "https://www.googleapis.com/books/v1/volumes" +
+        "?q=" + encodeURIComponent(query) +
+        "&maxResults=" + MAX_RESULTS +
+        "&startIndex=" + startIndex +
+        "&printType=books" +
+        "&orderBy=relevance" +
+        "&filter=free-ebooks";
+    if (API_KEY) {
+        url += "&key=" + encodeURIComponent(API_KEY);
+    }
+    return url;
+}
+
+function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+// Fetch with exponential backoff on 429/503. Honors Retry-After when present.
+async function fetchWithRetry(url) {
+    var delay = 1000;
+    for (var attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        var res = await fetch(url);
+        if (res.ok) {
+            return res.json();
+        }
+        var retryable = res.status === 429 || res.status === 503;
+        if (!retryable || attempt === MAX_RETRIES) {
+            var err = new Error("HTTP " + res.status);
+            err.status = res.status;
+            throw err;
+        }
+        var retryAfter = parseInt(res.headers.get("Retry-After"), 10);
+        var wait = !isNaN(retryAfter) ? retryAfter * 1000 : delay;
+        setStatus("Google is busy, retrying in " + Math.ceil(wait / 1000) + "s...");
+        await sleep(wait);
+        delay *= 2;
+    }
+}
+
+async function loadResults(query, page) {
+    if (isLoading) { return; }          // ignore double Enter / double clicks
+    isLoading = true;
+    currentQuery = query;
+    currentPage = page;
+    showLoading(true);
+    clearResults();
+
+    var startIndex = page * MAX_RESULTS;
+    var key = query + "|" + startIndex;
+
+    try {
+        var data = cache[key];
+        if (!data) {
+            data = await fetchWithRetry(buildUrl(query, startIndex));
+            cache[key] = data;
+        }
+        renderResponse(data);
+    } catch (e) {
+        if (e.status === 429) {
+            displayMessage("Google Books has temporarily limited requests (HTTP 429). " +
+                "Please wait a minute and try again.");
+        } else {
+            displayMessage("Could not fetch results (" + e.message + "). Please try again.");
+        }
+    } finally {
+        isLoading = false;
+        showLoading(false);
+    }
+}
+
+function renderResponse(response) {
+    var items = response.items || [];
+    if (items.length === 0) {
+        displayMessage(currentPage === 0 ? "No books found" : "No more results");
+        return;
+    }
+
+    var html = "";
+    for (var i = 0; i < items.length; i++) {
+        html += createBookListItem(items[i]);
+    }
+
+    // The API's totalItems is only an estimate, so "more pages" = this page came back full.
+    var hasMore = items.length === MAX_RESULTS;
+
+    if (html) {
+        document.getElementById("content").innerHTML = "<ol>" + html + "</ol>";
+    } else {
+        displayMessage("No downloadable public-domain books on this page.");
+    }
+    renderPagination(hasMore);
+}
+
+function createBookListItem(item) {
+    var access = item.accessInfo || {};
+    var info = item.volumeInfo || {};
+
+    // Keep only full public-domain books that can be downloaded
+    if (access.accessViewStatus !== "FULL_PUBLIC_DOMAIN") { return ""; }
+    var pdf = access.pdf && access.pdf.isAvailable && access.pdf.downloadLink;
+    var epub = access.epub && access.epub.isAvailable && access.epub.downloadLink;
+    if (!pdf && !epub) { return ""; }
+
+    var html = "<li>";
+    html += "<b title='" + esc(info.description || "") + "'>" + esc(info.title || "Untitled") + "</b>";
+    if (info.authors && info.authors.length) {
+        html += ": " + esc(info.authors.join(", ")) + "; ";
+    }
+    if (info.publisher) { html += "<i>" + esc(info.publisher) + "</i>"; }
+    if (info.publishedDate) { html += " (" + esc(info.publishedDate) + ") "; }
+
+    if (epub) { html += " <a href='" + esc(https(epub)) + "' target='_blank' rel='noopener'>EPUB</a>"; }
+    if (pdf) { html += " <a href='" + esc(https(pdf)) + "' target='_blank' rel='noopener'>PDF</a>"; }
+    if (access.webReaderLink) {
+        html += " <a href='" + esc(https(access.webReaderLink)) + "' target='_blank' rel='noopener'>Web</a>";
+    }
+    return html + "</li>";
+}
+
+function renderPagination(hasMore) {
+    var el = document.getElementById("pagination");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "pagination";
+        document.getElementById("content").parentNode.appendChild(el);
+    }
+    el.innerHTML = "";
+
+    if (currentPage > 0) {
+        el.appendChild(makeButton("Previous", function () { loadResults(currentQuery, currentPage - 1); }));
+    }
+    el.appendChild(document.createTextNode(" Page " + (currentPage + 1) + " "));
+    if (hasMore) {
+        el.appendChild(makeButton("Next", function () { loadResults(currentQuery, currentPage + 1); }));
+    }
+}
+
+function makeButton(label, onClick) {
+    var b = document.createElement("button");
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
+}
+
+// ---------- small helpers ----------
+function esc(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function https(url) {
+    return String(url).replace(/^http:\/\//i, "https://");
+}
+
+function displayMessage(text) {
+    document.getElementById("content").textContent = text;
+    var p = document.getElementById("pagination");
+    if (p) { p.innerHTML = ""; }
+}
+
+function clearResults() {
+    document.getElementById("content").innerHTML = "";
+    var p = document.getElementById("pagination");
+    if (p) { p.innerHTML = ""; }
+}
+
+function setStatus(text) {
+    var el = document.getElementById("fetching");
+    if (el) { el.textContent = text; el.style.display = "block"; }
+}
+
+function showLoading(show) {
+    var el = document.getElementById("fetching");
+    if (!el) { return; }
+    el.textContent = "Fetching results...";
+    el.style.display = show ? "block" : "none";
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    var input = document.getElementById("search_input");
+    showLoading(false);
+    if (!input) { return; }
+    input.focus();
+    input.addEventListener("keydown", function (e) {
+        var q = input.value.trim();
+        if (e.key === "Enter" && q !== "") {
+            e.preventDefault();
+            loadResults(q, 0);
+        }
+    });
+});	
+</script>
+</body>
+</html>
