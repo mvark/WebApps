@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Free Books Search: Google Books + Open Library + Archive.org</title>
+</head>
+
+<body>
+<div class="main-container">
+    <div class="main wrapper clearfix">
+
+        <article>
+            <header>
+                <h4>Search free books from Google Books, Open Library and Archive.org</h4>
+                <p><input type="text" id="search_input" aria-label="Search input" placeholder="Enter title, author or subject"></p>
+            </header>
+
+            <section>
+                <div id="fetching" hidden>Fetching results...</div>
+                <div id="notes"></div>
+                <div id="content" aria-live="polite"></div>
+                <p><button id="more" hidden>Load more</button> <span id="end"></span></p>
+            </section>
+        </article>
+
+        <aside>
+            <h3>tips</h3>
+            <ul style="text-align: justify">
+                <li>Books that are free to read <strong>without login</strong> are listed first, in bold</li>
+                <li>Books listed after them can be borrowed from Open Library or Archive.org and need a free Archive.org account</li>
+                <li>The same book may appear more than once, once for each site that has it</li>
+                <li>Click <strong>Load more</strong> to fetch the next batch from every site</li>
+                <li>Enclose keywords in quotation marks for an exact phrase search</li>
+            </ul>
+        </aside>
+
+    </div>
+</div>
+
+<script>
+(() => {
+    'use strict';
+
+    // ---------- Settings ----------
+    const GOOGLE_API_KEY = '';      // Optional but recommended: avoids Google's shared-quota 429 errors
+    const PAGE_SIZE = 20;           // results requested per site, per click
+    const MAX_RETRIES = 3;          // retries on 429 / 503
+    const OL_FIELDS = 'key,title,author_name,first_publish_year,ebook_access,ia';
+
+    // ---------- Page elements and state ----------
+    const $ = id => document.getElementById(id);
+    const els = {
+        input: $('search_input'), fetching: $('fetching'), notes: $('notes'),
+        content: $('content'), more: $('more'), end: $('end')
+    };
+    let searchId = 0;       // lets us ignore answers from an older search
+    let tiers = [];         // tiers[0] = free without login, tiers[1] = login required
+    let tier = 0;           // tier currently being loaded
+    let shownTier = -1;     // tier whose heading is already on the page
+    let list = null;        // the <ol> being filled
+    let shownCount = 0;
+    const notes = new Set();
+
+    const HEADINGS = [
+        'Free to read online (no login)',
+        'Requires a login: borrow with a free Archive.org account'
+    ];
+
+    // ---------- Helpers ----------
+    const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ESCAPES[ch]);
+    const https = url => String(url).replace(/^http:\/\//i, 'https://');
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const first = v => (Array.isArray(v) ? v[0] : v);
+
+    function setLoading(on, text = 'Fetching results...') {
+        els.fetching.textContent = text;
+        els.fetching.hidden = !on;
+    }
+
+    // Keep an exact phrase if the user quoted it; otherwise remove characters that break search syntax
+    function cleanQuery(raw) {
+        const text = raw.trim();
+        const isPhrase = text.length > 1 && text.startsWith('"') && text.endsWith('"');
+        const clean = text.replace(/["():[\]{}^~*?\\!]/g, ' ').replace(/\s+/g, ' ').trim();
+        return isPhrase && clean ? `"${clean}"` : clean;
+    }
+
+    // fetch() with retry and exponential backoff for "too many requests" errors
+    async function fetchJson(url) {
+        let delay = 1000;
+        for (let attempt = 0; ; attempt++) {
+            const res = await fetch(url);
+            if (res.ok) return res.json();
+            const retryable = res.status === 429 || res.status === 503;
+            if (!retryable || attempt >= MAX_RETRIES) throw new Error(`HTTP ${res.status}`);
+            const retryAfter = Number(res.headers.get('Retry-After'));
+            const wait = retryAfter > 0 ? retryAfter * 1000 : delay;
+            setLoading(true, `A site is busy, retrying in ${Math.ceil(wait / 1000)}s...`);
+            await sleep(wait);
+            delay *= 2;
+        }
+    }
+
+    // ---------- The three sources ----------
+    // Each "stream" remembers its own position and returns the next batch of normalized books:
+    // { title, by, year, source, bold, label, links: [[text, url], ...] }
+
+    function googleStream(text) {
+        let start = 0;
+        const stream = {
+            name: 'Google Books', done: false,
+            async next() {
+                const p = new URLSearchParams({
+                    q: text, filter: 'free-ebooks', printType: 'books',
+                    maxResults: PAGE_SIZE, startIndex: start
+                });
+                if (GOOGLE_API_KEY) p.set('key', GOOGLE_API_KEY);
+                const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?${p}`);
+                const raw = data.items || [];
+                start += raw.length;                 // Google may return fewer items than requested
+                if (!raw.length) stream.done = true;
+                return raw.map(googleBook).filter(Boolean);
+            }
+        };
+        return stream;
+    }
+
+    function googleBook(item) {
+        const access = item.accessInfo || {}, info = item.volumeInfo || {};
+        if (access.accessViewStatus !== 'FULL_PUBLIC_DOMAIN') return null;
+        const pdf = access.pdf && access.pdf.isAvailable && access.pdf.downloadLink;
+        const epub = access.epub && access.epub.isAvailable && access.epub.downloadLink;
+        const links = [];
+        if (epub) links.push(['EPUB', epub]);
+        if (pdf) links.push(['PDF', pdf]);
+        if (access.webReaderLink) links.push(['Read', access.webReaderLink]);
+        if (!links.length) return null;
+        return {
+            title: info.title || 'Untitled', by: (info.authors || []).slice(0, 3).join(', '),
+            year: info.publishedDate || '', source: 'Google Books',
+            bold: Boolean(pdf || epub), label: 'Public Domain', links
+        };
+    }
+
+    function openLibraryStream(clean, group) {
+        let page = 1;
+        const q = `(${clean}) AND ` + (group === 'public'
+            ? 'ebook_access:public'
+            : 'has_fulltext:true AND NOT ebook_access:public');
+        const stream = {
+            name: 'Open Library', done: false,
+            async next() {
+                const p = new URLSearchParams({ q, limit: PAGE_SIZE, page, fields: OL_FIELDS });
+                const data = await fetchJson(`https://openlibrary.org/search.json?${p}`);
+                const docs = data.docs || [];
+                if (!docs.length || page * PAGE_SIZE >= (data.num_found || 0)) stream.done = true;
+                page++;
+                return docs.filter(d => d.key).map(openLibraryBook);
+            }
+        };
+        return stream;
+    }
+
+    const OL_LABELS = { public: 'Public Access', borrowable: 'Borrowable', printdisabled: 'Print-disabled Access' };
+
+    function openLibraryBook(doc) {
+        const links = [['Open Library', `https://openlibrary.org${doc.key}`]];
+        if (doc.ia && doc.ia[0]) links.push(['Archive.org', `https://archive.org/details/${encodeURIComponent(doc.ia[0])}`]);
+        return {
+            title: doc.title || 'Unknown Title', by: (doc.author_name || []).slice(0, 3).join(', '),
+            year: doc.first_publish_year || '', source: 'Open Library',
+            bold: doc.ebook_access === 'public', label: OL_LABELS[doc.ebook_access] || 'Full Text', links
+        };
+    }
+
+    function archiveStream(clean, restricted) {
+        let page = 1;
+        const q = `(${clean}) AND mediatype:texts AND ` +
+                  (restricted ? 'access-restricted-item:true' : 'NOT access-restricted-item:true');
+        const stream = {
+            name: 'Archive.org', done: false,
+            async next() {
+                const p = new URLSearchParams({ q, rows: PAGE_SIZE, page, output: 'json' });
+                ['identifier', 'title', 'creator', 'year'].forEach(f => p.append('fl[]', f));
+                p.append('sort[]', 'downloads desc');   // popular items first
+                const data = (await fetchJson(`https://archive.org/advancedsearch.php?${p}`)).response || {};
+                const docs = data.docs || [];
+                if (!docs.length || page * PAGE_SIZE >= (data.numFound || 0)) stream.done = true;
+                page++;
+                return docs.filter(d => d.identifier).map(d => ({
+                    title: first(d.title) || d.identifier,
+                    by: [].concat(d.creator || []).slice(0, 3).join(', '),
+                    year: first(d.year) || '', source: 'Archive.org',
+                    bold: !restricted, label: restricted ? 'Borrow (login)' : 'Free',
+                    links: [['Archive.org', `https://archive.org/details/${encodeURIComponent(d.identifier)}`]]
+                }));
+            }
+        };
+        return stream;
+    }
+
+    // ---------- Search flow ----------
+    function startSearch() {
+        const text = els.input.value.trim();
+        const clean = cleanQuery(text);
+        if (!clean) return;
+
+        const id = ++searchId;
+        tiers = [
+            [googleStream(text), openLibraryStream(clean, 'public'), archiveStream(clean, false)],   // free, no login
+            [openLibraryStream(clean, 'other'), archiveStream(clean, true)]                            // login required
+        ];
+        tier = 0; shownTier = -1; list = null; shownCount = 0; notes.clear();
+        els.content.innerHTML = ''; els.notes.textContent = ''; els.end.textContent = '';
+        els.more.hidden = true;
+        loadMore(id);
+    }
+
+    async function loadMore(id = searchId) {
+        setLoading(true);
+        els.more.hidden = true;
+        try {
+            for (let attempt = 0; attempt < 5; attempt++) {
+                // Move to the next tier when every stream in the current tier is finished
+                while (tier < tiers.length && tiers[tier].every(s => s.done)) tier++;
+                if (tier >= tiers.length) break;
+
+                const streams = tiers[tier].filter(s => !s.done);
+                const results = await Promise.allSettled(streams.map(s => s.next()));   // all sites at once
+                if (id !== searchId) return;                                            // a newer search started
+
+                const batches = [];
+                results.forEach((r, i) => {
+                    if (r.status === 'fulfilled') {
+                        batches.push(r.value);
+                    } else {
+                        streams[i].done = true;                                          // give up on this site
+                        notes.add(`${streams[i].name} is unavailable (${r.reason.message}).`);
+                    }
+                });
+
+                const books = interleave(batches);
+                append(books);
+                if (books.length) break;                                                 // got something to show
+            }
+        } finally {
+            if (id === searchId) finish();
+        }
+    }
+
+    // Mix the batches so one site does not dominate: A1, B1, C1, A2, B2, C2 ...
+    function interleave(batches) {
+        const out = [];
+        const longest = Math.max(0, ...batches.map(b => b.length));
+        for (let i = 0; i < longest; i++) {
+            batches.forEach(b => { if (b[i]) out.push(b[i]); });
+        }
+        return out;
+    }
+
+    // ---------- Rendering ----------
+    function append(books) {
+        if (!books.length) return;
+        if (shownTier !== tier) {                      // first books of a new tier: add a heading and a fresh list
+            els.content.insertAdjacentHTML('beforeend', `<h5>${esc(HEADINGS[tier])}</h5><ol></ol>`);
+            list = els.content.lastElementChild;
+            shownTier = tier;
+        }
+        list.insertAdjacentHTML('beforeend', books.map(bookHtml).join(''));
+        shownCount += books.length;
+    }
+
+    function bookHtml(b) {
+        const title = esc(b.title);
+        const by = b.by ? `: ${esc(b.by)}; ` : ' ';
+        const year = b.year ? `(${esc(b.year)}) ` : '';
+        const links = b.links.map(([text, url]) =>
+            `<a href="${esc(https(url))}" target="_blank" rel="noopener">${esc(text)}</a>`).join(' ');
+        return `<li>${b.bold ? `<strong>${title}</strong>` : title}${by}${year}` +
+               `<small>[${esc(b.source)}, ${esc(b.label)}]</small> ${links}</li>`;
+    }
+
+    function finish() {
+        setLoading(false);
+        els.notes.innerHTML = [...notes].map(n => `<p><small>${esc(n)}</small></p>`).join('');
+        while (tier < tiers.length && tiers[tier].every(s => s.done)) tier++;
+        const moreAvailable = tier < tiers.length;
+        els.more.hidden = !moreAvailable;
+        els.end.textContent = moreAvailable ? '' : (shownCount ? 'No more results.' : 'No books found.');
+    }
+
+    // ---------- Events ----------
+    els.input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); startSearch(); }
+    });
+    els.more.addEventListener('click', () => loadMore());
+    els.input.focus();
+})();
+</script>
+</body>
+</html>
